@@ -1,0 +1,43 @@
+name: mutations
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # Optional: only run when it matters (mutants can be slow)
+    paths:
+      - ".cargo/mutants.toml"
+      - "Cargo.*"
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/**"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  mutants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - name: prepare cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants
+      - run: cargo mutants -vV --in-place
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants.out
+          path: mutants.out
