@@ -12,6 +12,10 @@ pub enum ParseError {
     InvalidCommand(u8),
     #[error("reserved must be zero")]
     ReservedMustBeZero,
+    #[error("unknown flags")]
+    UnknownFlags,
+    #[error("unknown extended flags")]
+    UnknownExtendedFlags,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -187,187 +191,118 @@ impl Command {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Flags(pub u8);
+bitflags::bitflags! {
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+    pub struct Flags: u8 {
+        /// This bit is set (1) in the SMB_COM_NEGOTIATE (0x72) Response (section 2.2.4.52.2)
+        /// if the server supports SMB_COM_LOCK_AND_READ (0x13) (section 2.2.4.20)
+        /// and SMB_COM_WRITE_AND_UNLOCK (0x14) (section 2.2.4.21) commands.
+        const SMB_FLAGS_LOCK_AND_READ_OK = 0x01;
+        /// Obsolete
+        ///
+        /// When set (on an SMB request being sent to the server), the client guarantees
+        /// that there is a receive buffer posted such that a send without acknowledgment
+        /// can be used by the server to respond to the client's request.
+        ///
+        /// This behavior is specific to an obsolete transport. This bit MUST be set
+        /// to zero by the client and MUST be ignored by the server.
+        const SMB_FLAGS_BUF_AVAIL = 0x02;
+        /// Obsolete. If this bit is set then all pathnames in the SMB SHOULD be treated as case-insensitive.
+        const SMB_FLAGS_CASE_INSENSITIVE = 0x08;
+        /// When set in session setup, this bit indicates that all paths sent to
+        /// the server are already in canonical format. That is, all file and
+        /// directory names are composed of valid file name characters in all upper-case,
+        /// and that the path segments are separated by backslash characters ('\').
+        const SMB_FLAGS_CANONICALIZED_PATHS = 0x10;
+        /// Obsolescent.
+        ///
+        /// This bit has meaning only in the deprecated SMB_COM_OPEN (0x02) Request
+        /// (section 2.2.4.3.1), SMB_COM_CREATE (0x03) Request (section 2.2.4.4.1),
+        /// and SMB_COM_CREATE_NEW (0x0F) Request (section 2.2.4.16.1) messages,
+        /// where it is used to indicate that the client is requesting an Exclusive OpLock.
+        /// It SHOULD be set to zero by the client, and ignored by the server, in all
+        /// other SMB requests. If the server grants this OpLock request, then this bit
+        /// SHOULD remain set in the corresponding response SMB to indicate to the client
+        /// that the OpLock request was granted.
+        const SMB_FLAGS_OPLOCK = 0x20;
+        /// Obsolescent.
+        ///
+        /// This bit has meaning only in the deprecated SMB_COM_OPEN (0x02) Request
+        /// (section 2.2.4.3.1), SMB_COM_CREATE (0x03) Request (section 2.2.4.4.1),
+        /// and SMB_COM_CREATE_NEW (0x0F) Request (section 2.2.4.16.1) messages,
+        /// where it is used to indicate that the client is requesting a Batch OpLock.
+        /// It SHOULD be set to zero by the client, and ignored by the server, in all
+        /// other SMB requests. If the server grants this OpLock request, then this
+        /// bit SHOULD remain set in the corresponding response SMB to indicate to
+        /// the client that the OpLock request was granted.
+        ///
+        /// If the SMB_FLAGS_OPLOCK bit is clear (0), then the SMB_FLAGS_OPBATCH bit is ignored.
+        const SMB_FLAGS_OPBATCH = 0x40;
 
-impl Flags {
-    const fn is_enabled(&self, flag: u8) -> bool {
-        self.0 & flag > 0
-    }
-
-    pub const fn set_flag(&mut self, flag: u8, enabled: bool) {
-        if enabled {
-            self.0 |= flag;
-        } else {
-            self.0 &= 0xff ^ flag;
-        }
-    }
-
-    /// This bit is set (1) in the SMB_COM_NEGOTIATE (0x72) Response (section 2.2.4.52.2)
-    /// if the server supports SMB_COM_LOCK_AND_READ (0x13) (section 2.2.4.20)
-    /// and SMB_COM_WRITE_AND_UNLOCK (0x14) (section 2.2.4.21) commands.
-    pub const SMB_FLAGS_LOCK_AND_READ_OK: u8 = 0x01;
-
-    pub const fn is_lock_and_read_ok(&self) -> bool {
-        self.is_enabled(Self::SMB_FLAGS_LOCK_AND_READ_OK)
-    }
-
-    pub const fn set_lock_and_read_ok(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB_FLAGS_LOCK_AND_READ_OK, enabled)
-    }
-
-    pub const fn with_lock_and_read_ok(mut self, enabled: bool) -> Self {
-        self.set_lock_and_read_ok(enabled);
-        self
-    }
-
-    /// Obsolete
-    ///
-    /// When set (on an SMB request being sent to the server), the client guarantees
-    /// that there is a receive buffer posted such that a send without acknowledgment
-    /// can be used by the server to respond to the client's request.
-    ///
-    /// This behavior is specific to an obsolete transport. This bit MUST be set
-    /// to zero by the client and MUST be ignored by the server.
-    pub const SMB_FLAGS_BUF_AVAIL: u8 = 0x02;
-
-    /// Obsolete. If this bit is set then all pathnames in the SMB SHOULD be treated as case-insensitive.
-    pub const SMB_FLAGS_CASE_INSENSITIVE: u8 = 0x08;
-
-    pub const fn is_case_insensitive(&self) -> bool {
-        self.is_enabled(Self::SMB_FLAGS_CASE_INSENSITIVE)
-    }
-
-    pub const fn set_case_insensitive(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB_FLAGS_CASE_INSENSITIVE, enabled)
-    }
-
-    pub const fn with_case_insensitive(mut self, enabled: bool) -> Self {
-        self.set_case_insensitive(enabled);
-        self
-    }
-
-    /// When set in session setup, this bit indicates that all paths sent to
-    /// the server are already in canonical format. That is, all file and
-    /// directory names are composed of valid file name characters in all upper-case,
-    /// and that the path segments are separated by backslash characters ('\').
-    pub const SMB_FLAGS_CANONICALIZED_PATHS: u8 = 0x10;
-
-    pub const fn is_canonicalized_paths(&self) -> bool {
-        self.is_enabled(Self::SMB_FLAGS_CANONICALIZED_PATHS)
-    }
-
-    pub const fn set_canonicalized_paths(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB_FLAGS_CANONICALIZED_PATHS, enabled)
-    }
-
-    pub const fn with_canonicalized_paths(mut self, enabled: bool) -> Self {
-        self.set_canonicalized_paths(enabled);
-        self
-    }
-
-    /// Obsolescent.
-    ///
-    /// This bit has meaning only in the deprecated SMB_COM_OPEN (0x02) Request
-    /// (section 2.2.4.3.1), SMB_COM_CREATE (0x03) Request (section 2.2.4.4.1),
-    /// and SMB_COM_CREATE_NEW (0x0F) Request (section 2.2.4.16.1) messages,
-    /// where it is used to indicate that the client is requesting an Exclusive OpLock.
-    /// It SHOULD be set to zero by the client, and ignored by the server, in all
-    /// other SMB requests. If the server grants this OpLock request, then this bit
-    /// SHOULD remain set in the corresponding response SMB to indicate to the client
-    /// that the OpLock request was granted.
-    pub const SMB_FLAGS_OPLOCK: u8 = 0x20;
-
-    /// Obsolescent.
-    ///
-    /// This bit has meaning only in the deprecated SMB_COM_OPEN (0x02) Request
-    /// (section 2.2.4.3.1), SMB_COM_CREATE (0x03) Request (section 2.2.4.4.1),
-    /// and SMB_COM_CREATE_NEW (0x0F) Request (section 2.2.4.16.1) messages,
-    /// where it is used to indicate that the client is requesting a Batch OpLock.
-    /// It SHOULD be set to zero by the client, and ignored by the server, in all
-    /// other SMB requests. If the server grants this OpLock request, then this
-    /// bit SHOULD remain set in the corresponding response SMB to indicate to
-    /// the client that the OpLock request was granted.
-    ///
-    /// If the SMB_FLAGS_OPLOCK bit is clear (0), then the SMB_FLAGS_OPBATCH bit is ignored.
-    pub const SMB_FLAGS_OPBATCH: u8 = 0x40;
-
-    /// When on, this message is being sent from the server in response to
-    /// a client request. The Command field usually contains the same value
-    /// in a protocol request from the client to the server as in the matching
-    /// response from the server to the client. This bit unambiguously
-    /// distinguishes the message as a server response.
-    pub const SMB_FLAGS_REPLY: u8 = 0x80;
-
-    pub const fn is_reply(&self) -> bool {
-        self.is_enabled(Self::SMB_FLAGS_REPLY)
-    }
-
-    pub const fn set_reply(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB_FLAGS_REPLY, enabled)
-    }
-
-    pub const fn with_reply(mut self, enabled: bool) -> Self {
-        self.set_reply(enabled);
-        self
+        /// When on, this message is being sent from the server in response to
+        /// a client request. The Command field usually contains the same value
+        /// in a protocol request from the client to the server as in the matching
+        /// response from the server to the client. This bit unambiguously
+        /// distinguishes the message as a server response.
+        const SMB_FLAGS_REPLY = 0x80;
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct ExtendedFlags(pub u16);
-
-impl ExtendedFlags {
-    /// If the bit is set, the message MAY contain long file names. If the bit is clear
-    /// then file names in the message MUST adhere to the 8.3 naming convention.
-    ///
-    /// If set in a client request for directory enumeration, the server MAY return long
-    /// names (that is, names that are not 8.3 names) in the response to this request.
-    /// If not set in a client request for directory enumeration, the server MUST return
-    /// only 8.3 names in the response to this request. This flag indicates that in a direct
-    /// enumeration request, paths returned by the server are not restricted to 8.3 names
-    /// format. This bit field SHOULD be set to 1 when the negotiated dialect is LANMAN2.0 or later.
-    pub const SMB_FLAGS2_LONG_NAMES: u16 = 0x0001;
-    /// If the bit is set, the client is aware of extended attributes (EAs).
-    ///
-    /// The client MUST set this bit if the client is aware of extended attributes.
-    /// In response to a client request with this flag set, a server MAY include extended
-    /// attributes in the response. This bit field SHOULD be set to 1 when the negotiated
-    /// dialect is LANMAN2.0 or later.
-    pub const SMB_FLAGS2_EAS: u16 = 0x0002;
-    /// If set by the client, the client is requesting signing (if signing is not yet active)
-    /// or the message being sent is signed. This bit is used on the SMB header of an
-    /// SMB_COM_SESSION_SETUP_ANDX (section 2.2.4.53) client request to indicate that the client
-    /// supports signing and that the server can choose to enforce signing on the connection
-    /// based on its configuration.
-    ///
-    /// To turn on signing for a connection, the server MUST set this flag and also sign
-    /// the SMB_COM_SESSION_SETUP_ANDX Response (section 2.2.4.53), after which all of
-    /// the traffic on the connection (except for OpLock Break notifications) MUST be signed.
-    /// In the SMB header of other CIFS client requests, the setting of this bit indicates
-    /// that the packet has been signed. This bit field SHOULD be set to 1 when the negotiated
-    /// dialect is NT LANMAN or later.
-    pub const SMB_FLAGS2_SMB_SECURITY_SIGNATURE: u16 = 0x0004;
-    /// Reserved but not implemented.
-    pub const SMB_FLAGS2_IS_LONG_NAME: u16 = 0x0040;
-    /// If the bit is set, any pathnames in this SMB SHOULD be resolved in the Distributed File System (DFS).
-    pub const SMB_FLAGS2_DFS: u16 = 0x1000;
-    /// This flag is useful only on a read request. If the bit is set, then the client MAY read the file
-    /// if the client does not have read permission but does have execute permission. This bit field SHOULD
-    /// be set to 1 when the negotiated dialect is LANMAN2.0 or later.
-    /// This flag is also known as SMB_FLAGS2_READ_IF_EXECUTE.
-    pub const SMB_FLAGS2_PAGING_IO: u16 = 0x2000;
-    /// If this bit is set in a client request, the server MUST return errors as 32-bit NTSTATUS codes
-    /// in the response. If it is clear, the server SHOULD<27> return errors in SMBSTATUS format.
-    ///
-    /// If this bit is set in the server response, the Status field in the header is formatted as
-    /// an NTSTATUS code; else, it is in SMBSTATUS format.
-    pub const SMB_FLAGS2_NT_STATUS: u16 = 0x4000;
-    /// If set in a client request or server response, each field that contains a string in
-    /// this SMB message MUST be encoded as an array of 16-bit Unicode characters, unless otherwise specified.
-    ///
-    /// If this bit is clear, each of these fields MUST be encoded as an array of OEM characters.
-    /// This bit field SHOULD be set to 1 when the negotiated dialect is NT LANMAN.
-    pub const SMB_FLAGS2_UNICODE: u16 = 0x8000;
+bitflags::bitflags! {
+    #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+    pub struct ExtendedFlags: u16 {
+        /// If the bit is set, the message MAY contain long file names. If the bit is clear
+        /// then file names in the message MUST adhere to the 8.3 naming convention.
+        ///
+        /// If set in a client request for directory enumeration, the server MAY return long
+        /// names (that is, names that are not 8.3 names) in the response to this request.
+        /// If not set in a client request for directory enumeration, the server MUST return
+        /// only 8.3 names in the response to this request. This flag indicates that in a direct
+        /// enumeration request, paths returned by the server are not restricted to 8.3 names
+        /// format. This bit field SHOULD be set to 1 when the negotiated dialect is LANMAN2.0 or later.
+        const SMB_FLAGS2_LONG_NAMES = 0x0001;
+        /// If the bit is set, the client is aware of extended attributes (EAs).
+        ///
+        /// The client MUST set this bit if the client is aware of extended attributes.
+        /// In response to a client request with this flag set, a server MAY include extended
+        /// attributes in the response. This bit field SHOULD be set to 1 when the negotiated
+        /// dialect is LANMAN2.0 or later.
+        const SMB_FLAGS2_EAS = 0x0002;
+        /// If set by the client, the client is requesting signing (if signing is not yet active)
+        /// or the message being sent is signed. This bit is used on the SMB header of an
+        /// SMB_COM_SESSION_SETUP_ANDX (section 2.2.4.53) client request to indicate that the client
+        /// supports signing and that the server can choose to enforce signing on the connection
+        /// based on its configuration.
+        ///
+        /// To turn on signing for a connection, the server MUST set this flag and also sign
+        /// the SMB_COM_SESSION_SETUP_ANDX Response (section 2.2.4.53), after which all of
+        /// the traffic on the connection (except for OpLock Break notifications) MUST be signed.
+        /// In the SMB header of other CIFS client requests, the setting of this bit indicates
+        /// that the packet has been signed. This bit field SHOULD be set to 1 when the negotiated
+        /// dialect is NT LANMAN or later.
+        const SMB_FLAGS2_SMB_SECURITY_SIGNATURE = 0x0004;
+        /// Reserved but not implemented.
+        const SMB_FLAGS2_IS_LONG_NAME = 0x0040;
+        /// If the bit is set, any pathnames in this SMB SHOULD be resolved in the Distributed File System (DFS).
+        const SMB_FLAGS2_DFS = 0x1000;
+        /// This flag is useful only on a read request. If the bit is set, then the client MAY read the file
+        /// if the client does not have read permission but does have execute permission. This bit field SHOULD
+        /// be set to 1 when the negotiated dialect is LANMAN2.0 or later.
+        /// This flag is also known as SMB_FLAGS2_READ_IF_EXECUTE.
+        const SMB_FLAGS2_PAGING_IO = 0x2000;
+        /// If this bit is set in a client request, the server MUST return errors as 32-bit NTSTATUS codes
+        /// in the response. If it is clear, the server SHOULD<27> return errors in SMBSTATUS format.
+        ///
+        /// If this bit is set in the server response, the Status field in the header is formatted as
+        /// an NTSTATUS code; else, it is in SMBSTATUS format.
+        const SMB_FLAGS2_NT_STATUS = 0x4000;
+        /// If set in a client request or server response, each field that contains a string in
+        /// this SMB message MUST be encoded as an array of 16-bit Unicode characters, unless otherwise specified.
+        ///
+        /// If this bit is clear, each of these fields MUST be encoded as an array of OEM characters.
+        /// This bit field SHOULD be set to 1 when the negotiated dialect is NT LANMAN.
+        const SMB_FLAGS2_UNICODE = 0x8000;
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -461,8 +396,10 @@ impl Header {
         let command = Command::try_from(buf[4]).map_err(ParseError::InvalidCommand)?;
 
         let status = u32_from_le_bytes(&buf[5..9]);
-        let flags = Flags(buf[9]);
-        let extended_flags = ExtendedFlags(u16_from_le_bytes(&buf[10..12]));
+        let flags = Flags::from_bits(buf[9]).ok_or(ParseError::UnknownFlags)?;
+
+        let extended_flags = ExtendedFlags::from_bits(u16_from_le_bytes(&buf[10..12]))
+            .ok_or(ParseError::UnknownExtendedFlags)?;
         let pid_high = u16_from_le_bytes(&buf[12..14]);
 
         let mut security_features = [0u8; 8];
