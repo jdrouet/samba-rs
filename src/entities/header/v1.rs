@@ -436,8 +436,8 @@ impl Header {
         (&mut buf[0..4]).copy_from_slice(&PROTOCOL_ID);
         buf[4] = self.command.to_u8();
         (&mut buf[5..9]).copy_from_slice(&self.status.to_le_bytes());
-        buf[9] = self.flags.0.bits();
-        (&mut buf[10..12]).copy_from_slice(&self.extended_flags.0.bits().to_le_bytes());
+        buf[9] = self.flags.bits();
+        (&mut buf[10..12]).copy_from_slice(&self.extended_flags.bits().to_le_bytes());
         (&mut buf[12..14]).copy_from_slice(&self.pid_high.to_le_bytes());
         (&mut buf[14..22]).copy_from_slice(&self.security_features);
         (&mut buf[24..26]).copy_from_slice(&self.tree_id.to_le_bytes());
