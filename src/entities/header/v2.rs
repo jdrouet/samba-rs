@@ -434,7 +434,10 @@ impl Header {
             let tree_id = u32::from_le_bytes(tree_id);
 
             // This MUST be 0 for the SMB2 TREE_CONNECT Request.
-            if matches!(command, Command::TreeConnect) && tree_id != 0 {
+            if matches!(command, Command::TreeConnect)
+                && !flags.is_server_to_redir()
+                && tree_id != 0
+            {
                 return Err(ParseError::TreeIdMustBeZero);
             }
 
@@ -628,6 +631,9 @@ mod tests {
         let encoded = header.encode();
         let _ = super::Header::parse(&encoded).unwrap();
 
+        // tree_connect request
+        let mut header = super::Header::negociate();
+        header.command = super::Command::TreeConnect;
         header.variant = super::HeaderVariant::Sync {
             reserved: 0,
             tree_id: 42,
@@ -635,6 +641,17 @@ mod tests {
         let encoded = header.encode();
         let err = super::Header::parse(&encoded).unwrap_err();
         assert!(matches!(err, super::ParseError::TreeIdMustBeZero));
+
+        // tree_connect response
+        let mut header = super::Header::negociate();
+        header.command = super::Command::TreeConnect;
+        header.variant = super::HeaderVariant::Sync {
+            reserved: 0,
+            tree_id: 42,
+        };
+        header.flags.set_server_to_redir(true);
+        let encoded = header.encode();
+        let _ = super::Header::parse(&encoded).unwrap();
     }
 
     #[test]
