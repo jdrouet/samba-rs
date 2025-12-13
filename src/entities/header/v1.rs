@@ -316,6 +316,60 @@ impl Flags {
 #[derive(Debug, PartialEq, Eq)]
 pub struct ExtendedFlags(pub u16);
 
+impl ExtendedFlags {
+    /// If the bit is set, the message MAY contain long file names. If the bit is clear
+    /// then file names in the message MUST adhere to the 8.3 naming convention.
+    ///
+    /// If set in a client request for directory enumeration, the server MAY return long
+    /// names (that is, names that are not 8.3 names) in the response to this request.
+    /// If not set in a client request for directory enumeration, the server MUST return
+    /// only 8.3 names in the response to this request. This flag indicates that in a direct
+    /// enumeration request, paths returned by the server are not restricted to 8.3 names
+    /// format. This bit field SHOULD be set to 1 when the negotiated dialect is LANMAN2.0 or later.
+    pub const SMB_FLAGS2_LONG_NAMES: u16 = 0x0001;
+    /// If the bit is set, the client is aware of extended attributes (EAs).
+    ///
+    /// The client MUST set this bit if the client is aware of extended attributes.
+    /// In response to a client request with this flag set, a server MAY include extended
+    /// attributes in the response. This bit field SHOULD be set to 1 when the negotiated
+    /// dialect is LANMAN2.0 or later.
+    pub const SMB_FLAGS2_EAS: u16 = 0x0002;
+    /// If set by the client, the client is requesting signing (if signing is not yet active)
+    /// or the message being sent is signed. This bit is used on the SMB header of an
+    /// SMB_COM_SESSION_SETUP_ANDX (section 2.2.4.53) client request to indicate that the client
+    /// supports signing and that the server can choose to enforce signing on the connection
+    /// based on its configuration.
+    ///
+    /// To turn on signing for a connection, the server MUST set this flag and also sign
+    /// the SMB_COM_SESSION_SETUP_ANDX Response (section 2.2.4.53), after which all of
+    /// the traffic on the connection (except for OpLock Break notifications) MUST be signed.
+    /// In the SMB header of other CIFS client requests, the setting of this bit indicates
+    /// that the packet has been signed. This bit field SHOULD be set to 1 when the negotiated
+    /// dialect is NT LANMAN or later.
+    pub const SMB_FLAGS2_SMB_SECURITY_SIGNATURE: u16 = 0x0004;
+    /// Reserved but not implemented.
+    pub const SMB_FLAGS2_IS_LONG_NAME: u16 = 0x0040;
+    /// If the bit is set, any pathnames in this SMB SHOULD be resolved in the Distributed File System (DFS).
+    pub const SMB_FLAGS2_DFS: u16 = 0x1000;
+    /// This flag is useful only on a read request. If the bit is set, then the client MAY read the file
+    /// if the client does not have read permission but does have execute permission. This bit field SHOULD
+    /// be set to 1 when the negotiated dialect is LANMAN2.0 or later.
+    /// This flag is also known as SMB_FLAGS2_READ_IF_EXECUTE.
+    pub const SMB_FLAGS2_PAGING_IO: u16 = 0x2000;
+    /// If this bit is set in a client request, the server MUST return errors as 32-bit NTSTATUS codes
+    /// in the response. If it is clear, the server SHOULD<27> return errors in SMBSTATUS format.
+    ///
+    /// If this bit is set in the server response, the Status field in the header is formatted as
+    /// an NTSTATUS code; else, it is in SMBSTATUS format.
+    pub const SMB_FLAGS2_NT_STATUS: u16 = 0x4000;
+    /// If set in a client request or server response, each field that contains a string in
+    /// this SMB message MUST be encoded as an array of 16-bit Unicode characters, unless otherwise specified.
+    ///
+    /// If this bit is clear, each of these fields MUST be encoded as an array of OEM characters.
+    /// This bit field SHOULD be set to 1 when the negotiated dialect is NT LANMAN.
+    pub const SMB_FLAGS2_UNICODE: u16 = 0x8000;
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SecurityFeatures {
     Negotiated {
@@ -363,6 +417,10 @@ pub struct Header {
     ///
     /// An 8-bit field of 1-bit flags describing various features in effect for the message.
     pub flags: Flags,
+    /// Flags2 (2 bytes)
+    ///
+    /// A 16-bit field of 1-bit flags that represent various features in effect for the message.
+    /// Unspecified bits are reserved and MUST be zero.
     pub extended_flags: ExtendedFlags,
     /// PIDHigh (2 bytes)
     ///
