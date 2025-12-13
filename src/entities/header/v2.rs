@@ -1,3 +1,5 @@
+use crate::entities::{u16_from_le_bytes, u32_from_le_bytes, u64_from_le_bytes};
+
 pub const PROTOCOL_ID: [u8; 4] = [0xFE, b'S', b'M', b'B'];
 
 #[derive(Debug, thiserror::Error)]
@@ -382,56 +384,30 @@ impl Header {
         }
 
         // This MUST be set to 64, which is the size, in bytes, of the SMB2 header structure.
-        let mut structure_size = [0u8; 2];
-        structure_size.copy_from_slice(&buf[4..6]);
-        let structure_size = u16::from_le_bytes(structure_size);
+        let structure_size = u16_from_le_bytes(&buf[4..6]);
         if structure_size != 64 {
             return Err(ParseError::InvalidStructureSize(structure_size));
         }
 
-        let mut credit_charge = [0u8; 2];
-        credit_charge.copy_from_slice(&buf[6..8]);
-        let credit_charge = u16::from_le_bytes(credit_charge);
+        let credit_charge = u16_from_le_bytes(&buf[6..8]);
+        let status = u32_from_le_bytes(&buf[8..12]);
 
-        let mut status = [0u8; 4];
-        status.copy_from_slice(&buf[8..12]);
-        let status = u32::from_le_bytes(status);
-
-        let mut command = [0u8; 2];
-        command.copy_from_slice(&buf[12..14]);
-        let command = u16::from_le_bytes(command);
+        let command = u16_from_le_bytes(&buf[12..14]);
         let command = Command::try_from(command).map_err(ParseError::InvalidCommand)?;
 
-        let mut credit_value = [0u8; 2];
-        credit_value.copy_from_slice(&buf[14..16]);
-        let credit_value = u16::from_le_bytes(credit_value);
+        let credit_value = u16_from_le_bytes(&buf[14..16]);
 
-        let mut flags = [0u8; 4];
-        flags.copy_from_slice(&buf[16..20]);
-        let flags = Flags(u32::from_le_bytes(flags));
-
-        let mut next_command = [0u8; 4];
-        next_command.copy_from_slice(&buf[20..24]);
-        let next_command = u32::from_le_bytes(next_command);
-
-        let mut message_id = [0u8; 8];
-        message_id.copy_from_slice(&buf[24..32]);
-        let message_id = u64::from_le_bytes(message_id);
+        let flags = Flags(u32_from_le_bytes(&buf[16..20]));
+        let next_command = u32_from_le_bytes(&buf[20..24]);
+        let message_id = u64_from_le_bytes(&buf[24..32]);
 
         let variant = if flags.is_async_command() {
-            let mut async_id = [0u8; 8];
-            async_id.copy_from_slice(&buf[32..40]);
-            let async_id = u64::from_le_bytes(async_id);
+            let async_id = u64_from_le_bytes(&buf[32..40]);
 
             HeaderVariant::Async { async_id }
         } else {
-            let mut reserved = [0u8; 4];
-            reserved.copy_from_slice(&buf[32..36]);
-            let reserved = u32::from_le_bytes(reserved);
-
-            let mut tree_id = [0u8; 4];
-            tree_id.copy_from_slice(&buf[36..40]);
-            let tree_id = u32::from_le_bytes(tree_id);
+            let reserved = u32_from_le_bytes(&buf[32..36]);
+            let tree_id = u32_from_le_bytes(&buf[36..40]);
 
             // This MUST be 0 for the SMB2 TREE_CONNECT Request.
             if matches!(command, Command::TreeConnect)
@@ -444,9 +420,7 @@ impl Header {
             HeaderVariant::Sync { reserved, tree_id }
         };
 
-        let mut session_id = [0u8; 8];
-        session_id.copy_from_slice(&buf[40..48]);
-        let session_id = u64::from_le_bytes(session_id);
+        let session_id = u64_from_le_bytes(&buf[40..48]);
 
         // This field MUST be set to 0 for an SMB2 NEGOTIATE Request and for an SMB2 NEGOTIATE Response
         if matches!(command, Command::Negotiate) && session_id != 0 {
