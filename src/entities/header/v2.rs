@@ -70,10 +70,49 @@ impl TryFrom<u16> for Command {
     }
 }
 
+impl Command {
+    pub const fn to_u16(&self) -> u16 {
+        match self {
+            Self::Negotiate => 0,
+            Self::SessionSetup => 1,
+            Self::Logoff => 2,
+            Self::TreeConnect => 3,
+            Self::TreeDisconnect => 4,
+            Self::Create => 5,
+            Self::Close => 6,
+            Self::Flush => 7,
+            Self::Read => 8,
+            Self::Write => 9,
+            Self::Lock => 10,
+            Self::IOCtl => 11,
+            Self::Cancel => 12,
+            Self::Echo => 13,
+            Self::QueryDirectory => 14,
+            Self::ChangeNotify => 15,
+            Self::QueryInfo => 16,
+            Self::SetInfo => 17,
+            Self::OPLockBreak => 18,
+            Self::ServerToClientNotification => 19,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Flags(pub u32);
 
 impl Flags {
+    const fn is_enabled(&self, flag: u32) -> bool {
+        self.0 & flag > 0
+    }
+
+    pub const fn set_flag(&mut self, flag: u32, enabled: bool) {
+        if enabled {
+            self.0 |= flag;
+        } else {
+            self.0 &= 0xffffffff ^ flag;
+        }
+    }
+
     /// SMB2_FLAGS_SERVER_TO_REDIR
     ///
     /// 0x00000001
@@ -81,8 +120,19 @@ impl Flags {
     /// When set, indicates the message is a response rather than a request.
     /// This MUST be set on responses sent from the server to the client,
     /// and MUST NOT be set on requests sent from the client to the server.
-    pub fn is_server_to_redir(&self) -> bool {
-        self.0 & 0x00000001 > 0
+    const SMB2_FLAGS_SERVER_TO_REDIR: u32 = 0x00000001;
+
+    pub const fn is_server_to_redir(&self) -> bool {
+        self.is_enabled(Self::SMB2_FLAGS_SERVER_TO_REDIR)
+    }
+
+    pub const fn set_server_to_redir(&mut self, enabled: bool) {
+        self.set_flag(Self::SMB2_FLAGS_SERVER_TO_REDIR, enabled);
+    }
+
+    pub const fn with_server_to_redir(mut self, enabled: bool) -> Self {
+        self.set_server_to_redir(enabled);
+        self
     }
 
     /// SMB2_FLAGS_ASYNC_COMMAND
@@ -91,8 +141,19 @@ impl Flags {
     ///
     /// When set, indicates that this is an ASYNC SMB2 header.
     /// Always set for headers of the form described in this section.
-    pub fn is_async_command(&self) -> bool {
-        self.0 & 0x00000002 > 0
+    const SMB2_FLAGS_ASYNC_COMMAND: u32 = 0x00000002;
+
+    pub const fn is_async_command(&self) -> bool {
+        self.is_enabled(Self::SMB2_FLAGS_ASYNC_COMMAND)
+    }
+
+    pub const fn set_async_command(&mut self, enabled: bool) {
+        self.set_flag(Self::SMB2_FLAGS_ASYNC_COMMAND, enabled);
+    }
+
+    pub const fn with_async_command(mut self, enabled: bool) -> Self {
+        self.set_async_command(enabled);
+        self
     }
 
     /// SMB2_FLAGS_RELATED_OPERATIONS
@@ -107,8 +168,19 @@ impl Flags {
     /// corresponding to this response was part of a related operation in a compounded
     /// request chain. The use of this flag in an SMB2 response is as specified
     /// in section 3.3.5.2.7.2.
-    pub fn is_related_operations(&self) -> bool {
-        self.0 & 0x00000004 > 0
+    pub const SMB2_FLAGS_RELATED_OPERATIONS: u32 = 0x00000004;
+
+    pub const fn is_related_operations(&self) -> bool {
+        self.is_enabled(Self::SMB2_FLAGS_RELATED_OPERATIONS)
+    }
+
+    pub const fn set_related_operations(&mut self, enabled: bool) {
+        self.set_flag(Self::SMB2_FLAGS_RELATED_OPERATIONS, enabled);
+    }
+
+    pub const fn with_related_operations(mut self, enabled: bool) -> Self {
+        self.set_related_operations(enabled);
+        self
     }
 
     /// SMB2_FLAGS_SIGNED
@@ -117,8 +189,19 @@ impl Flags {
     ///
     /// When set, indicates that this packet has been signed.
     /// The use of this flag is as specified in section 3.1.5.1.
-    pub fn is_signed(&self) -> bool {
-        self.0 & 0x00000008 > 0
+    pub const SMB2_FLAGS_SIGNED: u32 = 0x00000008;
+
+    pub const fn is_signed(&self) -> bool {
+        self.is_enabled(Self::SMB2_FLAGS_SIGNED)
+    }
+
+    pub const fn set_signed(&mut self, enabled: bool) {
+        self.set_flag(Self::SMB2_FLAGS_SIGNED, enabled);
+    }
+
+    pub const fn with_signed(mut self, enabled: bool) -> Self {
+        self.set_signed(enabled);
+        self
     }
 
     /// SMB2_FLAGS_PRIORITY_MASK
@@ -128,8 +211,19 @@ impl Flags {
     /// This flag is only valid for the SMB 3.1.1 dialect.
     /// It is a mask for the requested I/O priority of the request,
     /// and it MUST be a value in the range 0 to 7.
-    pub fn is_priority_mask(&self) -> bool {
-        self.0 & 0x00000070 > 0
+    pub const SMB2_FLAGS_PRIORITY_MASK: u32 = 0x00000070;
+
+    pub const fn is_priority_mask(&self) -> bool {
+        self.is_enabled(Self::SMB2_FLAGS_PRIORITY_MASK)
+    }
+
+    pub const fn set_priority_mask(&mut self, enabled: bool) {
+        self.set_flag(Self::SMB2_FLAGS_PRIORITY_MASK, enabled);
+    }
+
+    pub const fn with_priority_mask(mut self, enabled: bool) -> Self {
+        self.set_priority_mask(enabled);
+        self
     }
 
     /// SMB2_FLAGS_DFS_OPERATIONS
@@ -138,8 +232,19 @@ impl Flags {
     ///
     /// When set, indicates that this command is a Distributed File System (DFS)
     /// operation. The use of this flag is as specified in section 3.3.5.9.
-    pub fn is_dfs_operations(&self) -> bool {
-        self.0 & 0x10000000 > 0
+    pub const SMB2_FLAGS_DFS_OPERATIONS: u32 = 0x10000000;
+
+    pub const fn is_dfs_operations(&self) -> bool {
+        self.is_enabled(Self::SMB2_FLAGS_DFS_OPERATIONS)
+    }
+
+    pub const fn set_dfs_operations(&mut self, enabled: bool) {
+        self.set_flag(Self::SMB2_FLAGS_DFS_OPERATIONS, enabled);
+    }
+
+    pub const fn with_dfs_operations(mut self, enabled: bool) -> Self {
+        self.set_dfs_operations(enabled);
+        self
     }
 
     /// SMB2_FLAGS_REPLAY_OPERATION
@@ -150,8 +255,19 @@ impl Flags {
     /// When set, it indicates that this command is a replay operation.
     ///
     /// The client MUST ignore this bit on receipt.
-    pub fn is_replay_operation(&self) -> bool {
-        self.0 & 0x20000000 > 0
+    pub const SMB2_FLAGS_REPLAY_OPERATION: u32 = 0x20000000;
+
+    pub const fn is_replay_operation(&self) -> bool {
+        self.is_enabled(Self::SMB2_FLAGS_REPLAY_OPERATION)
+    }
+
+    pub const fn set_replay_operation(&mut self, enabled: bool) {
+        self.set_flag(Self::SMB2_FLAGS_REPLAY_OPERATION, enabled);
+    }
+
+    pub const fn with_replay_operation(mut self, enabled: bool) -> Self {
+        self.set_replay_operation(enabled);
+        self
     }
 }
 
@@ -240,6 +356,23 @@ pub enum HeaderVariant {
         /// - SMB2 CANCEL Request
         tree_id: u32,
     },
+}
+
+impl HeaderVariant {
+    pub fn encode(&self, buf: &mut [u8]) {
+        match self {
+            Self::Async { async_id } => {
+                buf.copy_from_slice(&async_id.to_le_bytes());
+            }
+            Self::Sync {
+                reserved: _,
+                tree_id,
+            } => {
+                // reserved is supposed to only be zeros, skipping
+                (&mut buf[4..]).copy_from_slice(&tree_id.to_le_bytes());
+            }
+        }
+    }
 }
 
 impl Header {
@@ -339,8 +472,99 @@ impl Header {
     }
 }
 
+impl Header {
+    pub fn encode(&self) -> [u8; 64] {
+        let mut buf = [0u8; 64];
+        (&mut buf[0..4]).copy_from_slice(&PROTOCOL_ID);
+        (&mut buf[4..6]).copy_from_slice(&64u16.to_le_bytes());
+        (&mut buf[6..8]).copy_from_slice(&self.credit_charge.to_le_bytes());
+        (&mut buf[8..12]).copy_from_slice(&self.status.to_le_bytes());
+        (&mut buf[12..14]).copy_from_slice(&self.command.to_u16().to_le_bytes());
+        (&mut buf[14..16]).copy_from_slice(&self.credit_value.to_le_bytes());
+        (&mut buf[16..20]).copy_from_slice(&self.flags.0.to_le_bytes());
+        (&mut buf[20..24]).copy_from_slice(&self.next_command.to_le_bytes());
+        (&mut buf[24..32]).copy_from_slice(&self.message_id.to_le_bytes());
+        self.variant.encode(&mut buf[32..40]);
+        (&mut buf[40..48]).copy_from_slice(&self.session_id.to_le_bytes());
+        (&mut buf[48..64]).copy_from_slice(&self.signature);
+        buf
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn should_update_flags() {
+        let mut flags = super::Flags(0);
+        assert!(!flags.is_async_command());
+        assert!(!flags.is_dfs_operations());
+        assert!(!flags.is_priority_mask());
+        assert!(!flags.is_related_operations());
+        assert!(!flags.is_replay_operation());
+        assert!(!flags.is_server_to_redir());
+        assert!(!flags.is_signed());
+
+        flags.set_async_command(true);
+        assert!(flags.is_async_command());
+
+        flags.set_dfs_operations(true);
+        assert!(flags.is_dfs_operations());
+
+        flags.set_priority_mask(true);
+        assert!(flags.is_priority_mask());
+
+        flags.set_related_operations(true);
+        assert!(flags.is_related_operations());
+
+        flags.set_replay_operation(true);
+        assert!(flags.is_replay_operation());
+
+        flags.set_server_to_redir(true);
+        assert!(flags.is_server_to_redir());
+
+        flags.set_signed(true);
+        assert!(flags.is_signed());
+
+        flags.set_async_command(false);
+        assert!(!flags.is_async_command());
+
+        flags.set_dfs_operations(false);
+        assert!(!flags.is_dfs_operations());
+
+        flags.set_priority_mask(false);
+        assert!(!flags.is_priority_mask());
+
+        flags.set_related_operations(false);
+        assert!(!flags.is_related_operations());
+
+        flags.set_replay_operation(false);
+        assert!(!flags.is_replay_operation());
+
+        flags.set_server_to_redir(false);
+        assert!(!flags.is_server_to_redir());
+
+        flags.set_signed(false);
+        assert!(!flags.is_signed());
+
+        assert_eq!(flags.0, 0);
+    }
+
+    #[test]
+    fn should_encode_decode_commands() {
+        for i in 0..20u16 {
+            let cmd = super::Command::try_from(i).unwrap();
+            assert_eq!(cmd.to_u16(), i);
+        }
+    }
+
+    #[test]
+    fn should_not_parse_commands() {
+        for i in 20u16..u16::MAX {
+            let value = super::Command::try_from(i).unwrap_err();
+            assert_eq!(value, i);
+        }
+    }
+
     #[test]
     fn should_fail_parsing_with_small_buffer() {
         for i in 0..64 {
