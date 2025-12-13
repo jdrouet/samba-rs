@@ -16,7 +16,7 @@ pub enum ParseError {
     SessionIdMustBeZero,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Command {
     Negotiate,
     SessionSetup,
@@ -97,7 +97,7 @@ impl Command {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Flags(pub u32);
 
 impl Flags {
@@ -271,7 +271,7 @@ impl Flags {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Header {
     /// CreditCharge (2 bytes)
     ///
@@ -325,7 +325,7 @@ pub struct Header {
     pub signature: [u8; 16],
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum HeaderVariant {
     Async {
         /// AsyncId (8 bytes)
@@ -399,7 +399,7 @@ impl Header {
 
         let mut command = [0u8; 2];
         command.copy_from_slice(&buf[12..14]);
-        let command = u16::from_be_bytes(command);
+        let command = u16::from_le_bytes(command);
         let command = Command::try_from(command).map_err(ParseError::InvalidCommand)?;
 
         let mut credit_value = [0u8; 2];
@@ -473,6 +473,24 @@ impl Header {
 }
 
 impl Header {
+    pub fn negociate() -> Self {
+        Self {
+            credit_charge: 0,
+            status: 0,
+            command: Command::Negotiate,
+            credit_value: 0,
+            flags: Flags(0),
+            next_command: 0,
+            message_id: 0,
+            variant: HeaderVariant::Sync {
+                reserved: 0,
+                tree_id: 0,
+            },
+            session_id: 0,
+            signature: [0; 16],
+        }
+    }
+
     pub fn encode(&self) -> [u8; 64] {
         let mut buf = [0u8; 64];
         (&mut buf[0..4]).copy_from_slice(&PROTOCOL_ID);
@@ -582,5 +600,82 @@ mod tests {
             let err = super::Header::parse(&buf).unwrap_err();
             assert!(matches!(err, super::ParseError::InvalidStructureSize(_)));
         }
+    }
+
+    #[test]
+    fn should_fail_parsing_negotiate_with_session_id() {
+        let mut header = super::Header::negociate();
+        header.session_id = 42;
+        let encoded = header.encode();
+        let err = super::Header::parse(&encoded).unwrap_err();
+        assert!(matches!(err, super::ParseError::SessionIdMustBeZero));
+    }
+
+    #[test]
+    fn should_fail_parsing_without_signature_when_expected() {
+        let mut header = super::Header::negociate();
+        header.flags.set_signed(false);
+        header.signature[0] = 1;
+        let encoded = header.encode();
+        let err = super::Header::parse(&encoded).unwrap_err();
+        assert!(matches!(err, super::ParseError::NonZeroSignature));
+    }
+
+    #[test]
+    fn should_fail_parsing_tree_connect_with_tree_id() {
+        let mut header = super::Header::negociate();
+        header.command = super::Command::TreeConnect;
+        let encoded = header.encode();
+        let _ = super::Header::parse(&encoded).unwrap();
+
+        header.variant = super::HeaderVariant::Sync {
+            reserved: 0,
+            tree_id: 42,
+        };
+        let encoded = header.encode();
+        let err = super::Header::parse(&encoded).unwrap_err();
+        assert!(matches!(err, super::ParseError::TreeIdMustBeZero));
+    }
+
+    #[test]
+    fn should_encode_async_variant() {
+        let mut buf = [0u8; 8];
+        super::HeaderVariant::Async { async_id: 42 }.encode(&mut buf);
+        assert_eq!(buf, [42, 0, 0, 0, 0, 0, 0, 0]);
+        super::HeaderVariant::Async { async_id: 12 }.encode(&mut buf);
+        assert_eq!(buf, [12, 0, 0, 0, 0, 0, 0, 0]);
+        super::HeaderVariant::Async { async_id: 1234 }.encode(&mut buf);
+        assert_eq!(buf, [210, 4, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn should_encode_sync_variant() {
+        let mut buf = [0u8; 8];
+        super::HeaderVariant::Sync {
+            reserved: 0,
+            tree_id: 10,
+        }
+        .encode(&mut buf);
+        assert_eq!(buf, [0, 0, 0, 0, 10, 0, 0, 0]);
+        super::HeaderVariant::Sync {
+            reserved: 0,
+            tree_id: 128,
+        }
+        .encode(&mut buf);
+        assert_eq!(buf, [0, 0, 0, 0, 128, 0, 0, 0]);
+        super::HeaderVariant::Sync {
+            reserved: 0,
+            tree_id: 1234,
+        }
+        .encode(&mut buf);
+        assert_eq!(buf, [0, 0, 0, 0, 210, 4, 0, 0]);
+    }
+
+    #[test]
+    fn should_encode_decode_negotiate() {
+        let header = super::Header::negociate();
+        let encoded = header.encode();
+        let decoded = super::Header::parse(&encoded).unwrap();
+        assert_eq!(header, decoded);
     }
 }
