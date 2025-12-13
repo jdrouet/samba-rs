@@ -433,17 +433,17 @@ impl Header {
 impl Header {
     pub fn encode(&self) -> [u8; 32] {
         let mut buf = [0u8; 32];
-        (&mut buf[0..4]).copy_from_slice(&PROTOCOL_ID);
+        buf[0..4].copy_from_slice(&PROTOCOL_ID);
         buf[4] = self.command.to_u8();
-        (&mut buf[5..9]).copy_from_slice(&self.status.to_le_bytes());
+        buf[5..9].copy_from_slice(&self.status.to_le_bytes());
         buf[9] = self.flags.bits();
-        (&mut buf[10..12]).copy_from_slice(&self.extended_flags.bits().to_le_bytes());
-        (&mut buf[12..14]).copy_from_slice(&self.pid_high.to_le_bytes());
-        (&mut buf[14..22]).copy_from_slice(&self.security_features);
-        (&mut buf[24..26]).copy_from_slice(&self.tree_id.to_le_bytes());
-        (&mut buf[26..28]).copy_from_slice(&self.pid_low.to_le_bytes());
-        (&mut buf[28..30]).copy_from_slice(&self.user_id.to_le_bytes());
-        (&mut buf[30..32]).copy_from_slice(&self.multiplex_id.to_le_bytes());
+        buf[10..12].copy_from_slice(&self.extended_flags.bits().to_le_bytes());
+        buf[12..14].copy_from_slice(&self.pid_high.to_le_bytes());
+        buf[14..22].copy_from_slice(&self.security_features);
+        buf[24..26].copy_from_slice(&self.tree_id.to_le_bytes());
+        buf[26..28].copy_from_slice(&self.pid_low.to_le_bytes());
+        buf[28..30].copy_from_slice(&self.user_id.to_le_bytes());
+        buf[30..32].copy_from_slice(&self.multiplex_id.to_le_bytes());
         buf
     }
 }
@@ -500,7 +500,7 @@ mod tests {
     #[test]
     fn should_encode_decode_header() {
         let mut buf = [0u8; 32];
-        (&mut buf[0..4]).copy_from_slice(&super::PROTOCOL_ID);
+        buf[0..4].copy_from_slice(&super::PROTOCOL_ID);
         let header = super::Header::parse(&buf).unwrap();
         let encoded = header.encode();
         assert_eq!(encoded, buf);

@@ -245,7 +245,7 @@ impl HeaderVariant {
                 tree_id,
             } => {
                 // reserved is supposed to only be zeros, skipping
-                (&mut buf[4..]).copy_from_slice(&tree_id.to_le_bytes());
+                buf[4..].copy_from_slice(&tree_id.to_le_bytes());
             }
         }
     }
@@ -345,18 +345,18 @@ impl Header {
 
     pub fn encode(&self) -> [u8; 64] {
         let mut buf = [0u8; 64];
-        (&mut buf[0..4]).copy_from_slice(&PROTOCOL_ID);
-        (&mut buf[4..6]).copy_from_slice(&64u16.to_le_bytes());
-        (&mut buf[6..8]).copy_from_slice(&self.credit_charge.to_le_bytes());
-        (&mut buf[8..12]).copy_from_slice(&self.status.to_le_bytes());
-        (&mut buf[12..14]).copy_from_slice(&self.command.to_u16().to_le_bytes());
-        (&mut buf[14..16]).copy_from_slice(&self.credit_value.to_le_bytes());
-        (&mut buf[16..20]).copy_from_slice(&self.flags.bits().to_le_bytes());
-        (&mut buf[20..24]).copy_from_slice(&self.next_command.to_le_bytes());
-        (&mut buf[24..32]).copy_from_slice(&self.message_id.to_le_bytes());
+        buf[0..4].copy_from_slice(&PROTOCOL_ID);
+        buf[4..6].copy_from_slice(&64u16.to_le_bytes());
+        buf[6..8].copy_from_slice(&self.credit_charge.to_le_bytes());
+        buf[8..12].copy_from_slice(&self.status.to_le_bytes());
+        buf[12..14].copy_from_slice(&self.command.to_u16().to_le_bytes());
+        buf[14..16].copy_from_slice(&self.credit_value.to_le_bytes());
+        buf[16..20].copy_from_slice(&self.flags.bits().to_le_bytes());
+        buf[20..24].copy_from_slice(&self.next_command.to_le_bytes());
+        buf[24..32].copy_from_slice(&self.message_id.to_le_bytes());
         self.variant.encode(&mut buf[32..40]);
-        (&mut buf[40..48]).copy_from_slice(&self.session_id.to_le_bytes());
-        (&mut buf[48..64]).copy_from_slice(&self.signature);
+        buf[40..48].copy_from_slice(&self.session_id.to_le_bytes());
+        buf[48..64].copy_from_slice(&self.signature);
         buf
     }
 }
@@ -394,7 +394,7 @@ mod tests {
     fn should_fail_parsing_with_invalid_structure_size() {
         let mut buf = [0u8; 64];
         for size in (0..=u16::MAX).filter(|i| *i != 64) {
-            (&mut buf[4..6]).copy_from_slice(&size.to_le_bytes());
+            buf[4..6].copy_from_slice(&size.to_le_bytes());
             let err = super::Header::parse(&buf).unwrap_err();
             assert!(matches!(err, super::ParseError::InvalidStructureSize(_)));
         }
