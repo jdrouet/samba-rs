@@ -16,6 +16,8 @@ pub enum ParseError {
     TreeIdMustBeZero,
     #[error("session_id must be zero")]
     SessionIdMustBeZero,
+    #[error("unknown flags")]
+    UnknownFlags,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,177 +82,68 @@ impl Command {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Flags(pub u32);
-
-impl Flags {
-    const fn is_enabled(&self, flag: u32) -> bool {
-        self.0 & flag > 0
-    }
-
-    pub const fn set_flag(&mut self, flag: u32, enabled: bool) {
-        if enabled {
-            self.0 |= flag;
-        } else {
-            self.0 &= 0xffffffff ^ flag;
-        }
-    }
-
-    /// SMB2_FLAGS_SERVER_TO_REDIR
-    ///
-    /// 0x00000001
-    ///
-    /// When set, indicates the message is a response rather than a request.
-    /// This MUST be set on responses sent from the server to the client,
-    /// and MUST NOT be set on requests sent from the client to the server.
-    const SMB2_FLAGS_SERVER_TO_REDIR: u32 = 0x00000001;
-
-    pub const fn is_server_to_redir(&self) -> bool {
-        self.is_enabled(Self::SMB2_FLAGS_SERVER_TO_REDIR)
-    }
-
-    pub const fn set_server_to_redir(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB2_FLAGS_SERVER_TO_REDIR, enabled);
-    }
-
-    pub const fn with_server_to_redir(mut self, enabled: bool) -> Self {
-        self.set_server_to_redir(enabled);
-        self
-    }
-
-    /// SMB2_FLAGS_ASYNC_COMMAND
-    ///
-    /// 0x00000002
-    ///
-    /// When set, indicates that this is an ASYNC SMB2 header.
-    /// Always set for headers of the form described in this section.
-    const SMB2_FLAGS_ASYNC_COMMAND: u32 = 0x00000002;
-
-    pub const fn is_async_command(&self) -> bool {
-        self.is_enabled(Self::SMB2_FLAGS_ASYNC_COMMAND)
-    }
-
-    pub const fn set_async_command(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB2_FLAGS_ASYNC_COMMAND, enabled);
-    }
-
-    pub const fn with_async_command(mut self, enabled: bool) -> Self {
-        self.set_async_command(enabled);
-        self
-    }
-
-    /// SMB2_FLAGS_RELATED_OPERATIONS
-    ///
-    /// 0x00000004
-    ///
-    /// When set in an SMB2 request, indicates that this request is a related
-    /// operation in a compounded request chain. The use of this flag in an
-    /// SMB2 request is as specified in section 3.2.4.1.4.
-    ///
-    /// When set in an SMB2 compound response, indicates that the request
-    /// corresponding to this response was part of a related operation in a compounded
-    /// request chain. The use of this flag in an SMB2 response is as specified
-    /// in section 3.3.5.2.7.2.
-    pub const SMB2_FLAGS_RELATED_OPERATIONS: u32 = 0x00000004;
-
-    pub const fn is_related_operations(&self) -> bool {
-        self.is_enabled(Self::SMB2_FLAGS_RELATED_OPERATIONS)
-    }
-
-    pub const fn set_related_operations(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB2_FLAGS_RELATED_OPERATIONS, enabled);
-    }
-
-    pub const fn with_related_operations(mut self, enabled: bool) -> Self {
-        self.set_related_operations(enabled);
-        self
-    }
-
-    /// SMB2_FLAGS_SIGNED
-    ///
-    /// 0x00000008
-    ///
-    /// When set, indicates that this packet has been signed.
-    /// The use of this flag is as specified in section 3.1.5.1.
-    pub const SMB2_FLAGS_SIGNED: u32 = 0x00000008;
-
-    pub const fn is_signed(&self) -> bool {
-        self.is_enabled(Self::SMB2_FLAGS_SIGNED)
-    }
-
-    pub const fn set_signed(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB2_FLAGS_SIGNED, enabled);
-    }
-
-    pub const fn with_signed(mut self, enabled: bool) -> Self {
-        self.set_signed(enabled);
-        self
-    }
-
-    /// SMB2_FLAGS_PRIORITY_MASK
-    ///
-    /// 0x00000070
-    ///
-    /// This flag is only valid for the SMB 3.1.1 dialect.
-    /// It is a mask for the requested I/O priority of the request,
-    /// and it MUST be a value in the range 0 to 7.
-    pub const SMB2_FLAGS_PRIORITY_MASK: u32 = 0x00000070;
-
-    pub const fn is_priority_mask(&self) -> bool {
-        self.is_enabled(Self::SMB2_FLAGS_PRIORITY_MASK)
-    }
-
-    pub const fn set_priority_mask(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB2_FLAGS_PRIORITY_MASK, enabled);
-    }
-
-    pub const fn with_priority_mask(mut self, enabled: bool) -> Self {
-        self.set_priority_mask(enabled);
-        self
-    }
-
-    /// SMB2_FLAGS_DFS_OPERATIONS
-    ///
-    /// 0x10000000
-    ///
-    /// When set, indicates that this command is a Distributed File System (DFS)
-    /// operation. The use of this flag is as specified in section 3.3.5.9.
-    pub const SMB2_FLAGS_DFS_OPERATIONS: u32 = 0x10000000;
-
-    pub const fn is_dfs_operations(&self) -> bool {
-        self.is_enabled(Self::SMB2_FLAGS_DFS_OPERATIONS)
-    }
-
-    pub const fn set_dfs_operations(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB2_FLAGS_DFS_OPERATIONS, enabled);
-    }
-
-    pub const fn with_dfs_operations(mut self, enabled: bool) -> Self {
-        self.set_dfs_operations(enabled);
-        self
-    }
-
-    /// SMB2_FLAGS_REPLAY_OPERATION
-    ///
-    /// 0x20000000
-    ///
-    /// This flag is only valid for the SMB 3.x dialect family.
-    /// When set, it indicates that this command is a replay operation.
-    ///
-    /// The client MUST ignore this bit on receipt.
-    pub const SMB2_FLAGS_REPLAY_OPERATION: u32 = 0x20000000;
-
-    pub const fn is_replay_operation(&self) -> bool {
-        self.is_enabled(Self::SMB2_FLAGS_REPLAY_OPERATION)
-    }
-
-    pub const fn set_replay_operation(&mut self, enabled: bool) {
-        self.set_flag(Self::SMB2_FLAGS_REPLAY_OPERATION, enabled);
-    }
-
-    pub const fn with_replay_operation(mut self, enabled: bool) -> Self {
-        self.set_replay_operation(enabled);
-        self
+bitflags::bitflags! {
+    #[derive(Debug, PartialEq, Eq)]
+    pub struct Flags: u32 {
+        /// SMB2_FLAGS_SERVER_TO_REDIR
+        ///
+        /// 0x00000001
+        ///
+        /// When set, indicates the message is a response rather than a request.
+        /// This MUST be set on responses sent from the server to the client,
+        /// and MUST NOT be set on requests sent from the client to the server.
+        const SMB2_FLAGS_SERVER_TO_REDIR = 0x00000001;
+        /// SMB2_FLAGS_ASYNC_COMMAND
+        ///
+        /// 0x00000002
+        ///
+        /// When set, indicates that this is an ASYNC SMB2 header.
+        /// Always set for headers of the form described in this section.
+        const SMB2_FLAGS_ASYNC_COMMAND = 0x00000002;
+        /// SMB2_FLAGS_RELATED_OPERATIONS
+        ///
+        /// 0x00000004
+        ///
+        /// When set in an SMB2 request, indicates that this request is a related
+        /// operation in a compounded request chain. The use of this flag in an
+        /// SMB2 request is as specified in section 3.2.4.1.4.
+        ///
+        /// When set in an SMB2 compound response, indicates that the request
+        /// corresponding to this response was part of a related operation in a compounded
+        /// request chain. The use of this flag in an SMB2 response is as specified
+        /// in section 3.3.5.2.7.2.
+        const SMB2_FLAGS_RELATED_OPERATIONS = 0x00000004;
+        /// SMB2_FLAGS_SIGNED
+        ///
+        /// 0x00000008
+        ///
+        /// When set, indicates that this packet has been signed.
+        /// The use of this flag is as specified in section 3.1.5.1.
+        const SMB2_FLAGS_SIGNED = 0x00000008;
+        /// SMB2_FLAGS_PRIORITY_MASK
+        ///
+        /// 0x00000070
+        ///
+        /// This flag is only valid for the SMB 3.1.1 dialect.
+        /// It is a mask for the requested I/O priority of the request,
+        /// and it MUST be a value in the range 0 to 7.
+        const SMB2_FLAGS_PRIORITY_MASK = 0x00000070;
+        /// SMB2_FLAGS_DFS_OPERATIONS
+        ///
+        /// 0x10000000
+        ///
+        /// When set, indicates that this command is a Distributed File System (DFS)
+        /// operation. The use of this flag is as specified in section 3.3.5.9.
+        const SMB2_FLAGS_DFS_OPERATIONS = 0x10000000;
+        /// SMB2_FLAGS_REPLAY_OPERATION
+        ///
+        /// 0x20000000
+        ///
+        /// This flag is only valid for the SMB 3.x dialect family.
+        /// When set, it indicates that this command is a replay operation.
+        ///
+        /// The client MUST ignore this bit on receipt.
+        const SMB2_FLAGS_REPLAY_OPERATION = 0x20000000;
     }
 }
 
@@ -378,11 +271,12 @@ impl Header {
 
         let credit_value = u16_from_le_bytes(&buf[14..16]);
 
-        let flags = Flags(u32_from_le_bytes(&buf[16..20]));
+        let flags =
+            Flags::from_bits(u32_from_le_bytes(&buf[16..20])).ok_or(ParseError::UnknownFlags)?;
         let next_command = u32_from_le_bytes(&buf[20..24]);
         let message_id = u64_from_le_bytes(&buf[24..32]);
 
-        let variant = if flags.is_async_command() {
+        let variant = if flags.contains(Flags::SMB2_FLAGS_ASYNC_COMMAND) {
             let async_id = u64_from_le_bytes(&buf[32..40]);
 
             HeaderVariant::Async { async_id }
@@ -392,7 +286,7 @@ impl Header {
 
             // This MUST be 0 for the SMB2 TREE_CONNECT Request.
             if matches!(command, Command::TreeConnect)
-                && !flags.is_server_to_redir()
+                && !flags.contains(Flags::SMB2_FLAGS_SERVER_TO_REDIR)
                 && tree_id != 0
             {
                 return Err(ParseError::TreeIdMustBeZero);
@@ -411,7 +305,7 @@ impl Header {
         let mut signature = [0u8; 16];
         signature.copy_from_slice(&buf[48..64]);
 
-        if !flags.is_signed() && signature != [0u8; 16] {
+        if !flags.contains(Flags::SMB2_FLAGS_SIGNED) && signature != [0u8; 16] {
             return Err(ParseError::NonZeroSignature);
         }
 
@@ -437,7 +331,7 @@ impl Header {
             status: 0,
             command: Command::Negotiate,
             credit_value: 0,
-            flags: Flags(0),
+            flags: Flags::empty(),
             next_command: 0,
             message_id: 0,
             variant: HeaderVariant::Sync {
@@ -457,7 +351,7 @@ impl Header {
         (&mut buf[8..12]).copy_from_slice(&self.status.to_le_bytes());
         (&mut buf[12..14]).copy_from_slice(&self.command.to_u16().to_le_bytes());
         (&mut buf[14..16]).copy_from_slice(&self.credit_value.to_le_bytes());
-        (&mut buf[16..20]).copy_from_slice(&self.flags.0.to_le_bytes());
+        (&mut buf[16..20]).copy_from_slice(&self.flags.bits().to_le_bytes());
         (&mut buf[20..24]).copy_from_slice(&self.next_command.to_le_bytes());
         (&mut buf[24..32]).copy_from_slice(&self.message_id.to_le_bytes());
         self.variant.encode(&mut buf[32..40]);
@@ -469,61 +363,7 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn should_update_flags() {
-        let mut flags = super::Flags(0);
-        assert!(!flags.is_async_command());
-        assert!(!flags.is_dfs_operations());
-        assert!(!flags.is_priority_mask());
-        assert!(!flags.is_related_operations());
-        assert!(!flags.is_replay_operation());
-        assert!(!flags.is_server_to_redir());
-        assert!(!flags.is_signed());
-
-        flags.set_async_command(true);
-        assert!(flags.is_async_command());
-
-        flags.set_dfs_operations(true);
-        assert!(flags.is_dfs_operations());
-
-        flags.set_priority_mask(true);
-        assert!(flags.is_priority_mask());
-
-        flags.set_related_operations(true);
-        assert!(flags.is_related_operations());
-
-        flags.set_replay_operation(true);
-        assert!(flags.is_replay_operation());
-
-        flags.set_server_to_redir(true);
-        assert!(flags.is_server_to_redir());
-
-        flags.set_signed(true);
-        assert!(flags.is_signed());
-
-        flags.set_async_command(false);
-        assert!(!flags.is_async_command());
-
-        flags.set_dfs_operations(false);
-        assert!(!flags.is_dfs_operations());
-
-        flags.set_priority_mask(false);
-        assert!(!flags.is_priority_mask());
-
-        flags.set_related_operations(false);
-        assert!(!flags.is_related_operations());
-
-        flags.set_replay_operation(false);
-        assert!(!flags.is_replay_operation());
-
-        flags.set_server_to_redir(false);
-        assert!(!flags.is_server_to_redir());
-
-        flags.set_signed(false);
-        assert!(!flags.is_signed());
-
-        assert_eq!(flags.0, 0);
-    }
+    use crate::entities::header::v2::Flags;
 
     #[test]
     fn should_encode_decode_commands() {
@@ -572,7 +412,7 @@ mod tests {
     #[test]
     fn should_fail_parsing_without_signature_when_expected() {
         let mut header = super::Header::negociate();
-        header.flags.set_signed(false);
+        header.flags.set(Flags::SMB2_FLAGS_SIGNED, false);
         header.signature[0] = 1;
         let encoded = header.encode();
         let err = super::Header::parse(&encoded).unwrap_err();
@@ -604,7 +444,7 @@ mod tests {
             reserved: 0,
             tree_id: 42,
         };
-        header.flags.set_server_to_redir(true);
+        header.flags.set(Flags::SMB2_FLAGS_SERVER_TO_REDIR, true);
         let encoded = header.encode();
         let _ = super::Header::parse(&encoded).unwrap();
     }
