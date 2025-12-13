@@ -19,27 +19,28 @@ pub enum ParseError {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u16)]
 pub enum Command {
-    Negotiate,
-    SessionSetup,
-    Logoff,
-    TreeConnect,
-    TreeDisconnect,
-    Create,
-    Close,
-    Flush,
-    Read,
-    Write,
-    Lock,
-    IOCtl,
-    Cancel,
-    Echo,
-    QueryDirectory,
-    ChangeNotify,
-    QueryInfo,
-    SetInfo,
-    OPLockBreak,
-    ServerToClientNotification,
+    Negotiate = 0x0000,
+    SessionSetup = 0x0001,
+    Logoff = 0x0002,
+    TreeConnect = 0x0003,
+    TreeDisconnect = 0x0004,
+    Create = 0x0005,
+    Close = 0x0006,
+    Flush = 0x0007,
+    Read = 0x0008,
+    Write = 0x0009,
+    Lock = 0x000A,
+    IOCtl = 0x000B,
+    Cancel = 0x000C,
+    Echo = 0x000D,
+    QueryDirectory = 0x000E,
+    ChangeNotify = 0x000F,
+    QueryInfo = 0x0010,
+    SetInfo = 0x0011,
+    OPLockBreak = 0x0012,
+    ServerToClientNotification = 0x0013,
 }
 
 impl TryFrom<u16> for Command {
@@ -73,29 +74,9 @@ impl TryFrom<u16> for Command {
 }
 
 impl Command {
+    #[inline]
     pub const fn to_u16(&self) -> u16 {
-        match self {
-            Self::Negotiate => 0,
-            Self::SessionSetup => 1,
-            Self::Logoff => 2,
-            Self::TreeConnect => 3,
-            Self::TreeDisconnect => 4,
-            Self::Create => 5,
-            Self::Close => 6,
-            Self::Flush => 7,
-            Self::Read => 8,
-            Self::Write => 9,
-            Self::Lock => 10,
-            Self::IOCtl => 11,
-            Self::Cancel => 12,
-            Self::Echo => 13,
-            Self::QueryDirectory => 14,
-            Self::ChangeNotify => 15,
-            Self::QueryInfo => 16,
-            Self::SetInfo => 17,
-            Self::OPLockBreak => 18,
-            Self::ServerToClientNotification => 19,
-        }
+        *self as u16
     }
 }
 
