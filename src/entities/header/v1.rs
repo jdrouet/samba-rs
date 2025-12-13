@@ -4,7 +4,7 @@ use crate::entities::{u16_from_le_bytes, u32_from_le_bytes};
 
 pub const PROTOCOL_ID: [u8; 4] = [0xFF, b'S', b'M', b'B'];
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ParseError {
     #[error("buffer too short")]
     BufferTooShort,
@@ -427,5 +427,55 @@ impl Header {
             user_id,
             multiplex_id,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn should_fail_small_buffers() {
+        for i in 0..32 {
+            let buf = vec![0; i];
+            let err = super::Header::parse(&buf).unwrap_err();
+            assert_eq!(err, super::ParseError::BufferTooShort);
+        }
+    }
+
+    #[test]
+    fn should_fail_with_invalid_command() {
+        let mut buf = [0u8; 32];
+        buf[4] = 0x18;
+
+        let err = super::Header::parse(&buf).unwrap_err();
+        assert_eq!(err, super::ParseError::InvalidCommand(0x18));
+    }
+
+    #[test]
+    fn should_fail_with_invalid_flag() {
+        let mut buf = [0u8; 32];
+        buf[10] = 0x08;
+
+        let err = super::Header::parse(&buf).unwrap_err();
+        assert_eq!(err, super::ParseError::UnknownExtendedFlags);
+    }
+
+    #[test]
+    fn should_fail_with_non_zero_reserved_bytes() {
+        for i in [22, 23usize] {
+            let mut buf = [0u8; 32];
+            buf[i] = 0x01;
+
+            let err = super::Header::parse(&buf).unwrap_err();
+            assert_eq!(err, super::ParseError::ReservedMustBeZero);
+        }
+    }
+
+    #[test]
+    fn should_encode_decode_commands() {
+        for i in 0..=u8::MAX {
+            if let Ok(cmd) = super::Command::try_from(i) {
+                assert_eq!(cmd.to_u8(), i);
+            }
+        }
     }
 }
