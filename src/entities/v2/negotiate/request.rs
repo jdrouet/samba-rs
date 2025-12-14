@@ -1,5 +1,7 @@
 //! https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e14db7ff-763a-4263-8b10-0c3944f52fc5
 
+use std::str::Utf8Error;
+
 use crate::entities::{BufferIterator, u16_from_le_bytes, u32_from_le_bytes, u128_from_le_bytes};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -24,6 +26,8 @@ pub enum ParseError {
     InvalidEncryptionCipher(u16),
     #[error("invalid hash algorithm {_0}")]
     InvalidHashAlgorithm(u16),
+    #[error("invalid unicode string")]
+    InvalidUnicode(#[from] Utf8Error),
     #[error("unknown capabilities")]
     UnknownCapabilities,
     #[error("unknown security modes")]
@@ -338,6 +342,7 @@ pub enum NegotiateContext<'a> {
     PreauthIntegrityCapabilities(PreauthIntegrityCapabilities<'a>),
     EncryptionCapabilities(EncryptionCapabilities<'a>),
     CompressionCapabilities(CompressionCapabilities<'a>),
+    NetNameNegotiateContextId(NetNameNegotiateContextId<'a>),
 }
 
 impl<'a> NegotiateContext<'a> {
@@ -362,6 +367,10 @@ impl<'a> NegotiateContext<'a> {
             }
             NegotiateContextType::CompressionCapabilities => {
                 CompressionCapabilities::parse(buf).map(NegotiateContext::CompressionCapabilities)
+            }
+            NegotiateContextType::NetNameNegotiateContextId => {
+                NetNameNegotiateContextId::parse(buf)
+                    .map(NegotiateContext::NetNameNegotiateContextId)
             }
             _ => todo!(),
         }
@@ -620,6 +629,22 @@ impl<'a> CompressionCapabilities<'a> {
             compression_algorithm_count,
             flags,
             compression_algorithms,
+        })
+    }
+}
+
+/// The SMB2_NETNAME_NEGOTIATE_CONTEXT_ID context is specified in an SMB2 NEGOTIATE request to
+/// indicate the server name the client connects to. The format of the data in the Data field of this
+/// SMB2_NEGOTIATE_CONTEXT is as follows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NetNameNegotiateContextId<'a> {
+    pub value: &'a str,
+}
+
+impl<'a> NetNameNegotiateContextId<'a> {
+    pub fn parse(buf: &'a [u8]) -> Result<Self, ParseError> {
+        Ok(Self {
+            value: std::str::from_utf8(buf)?,
         })
     }
 }
