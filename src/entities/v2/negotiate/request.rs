@@ -355,6 +355,8 @@ pub enum NegotiateContext<'a> {
     NetNameNegotiateContextId(NetNameNegotiateContextId<'a>),
     TransportCapabilities(TransportCapabilities),
     RDMATransformCapabilities(RDMATransformCapabilities<'a>),
+    SigningCapabilities(SigningCapabilities<'a>),
+    ContextTypeReserved(&'a [u8]),
 }
 
 impl<'a> NegotiateContext<'a> {
@@ -387,7 +389,16 @@ impl<'a> NegotiateContext<'a> {
             NegotiateContextType::TransportCapabilities => {
                 TransportCapabilities::parse(buf).map(NegotiateContext::TransportCapabilities)
             }
-            _ => todo!(),
+            NegotiateContextType::RDMATransformCapabilities => {
+                RDMATransformCapabilities::parse(buf)
+                    .map(NegotiateContext::RDMATransformCapabilities)
+            }
+            NegotiateContextType::SigningCapabilities => {
+                SigningCapabilities::parse(buf).map(NegotiateContext::SigningCapabilities)
+            }
+            NegotiateContextType::ContextTypeReserved => {
+                Ok(NegotiateContext::ContextTypeReserved(buf))
+            }
         }
     }
 }
