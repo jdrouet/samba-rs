@@ -1,5 +1,7 @@
 pub mod header;
 pub mod netbios;
+pub mod v1;
+pub mod v2;
 
 const fn u16_from_le_bytes(buf: &[u8]) -> u16 {
     let mut res = [0u8; 2];

@@ -363,8 +363,6 @@ impl Header {
 
 #[cfg(test)]
 mod tests {
-    use crate::entities::header::v2::Flags;
-
     #[test]
     fn should_encode_decode_commands() {
         for i in 0..20u16 {
@@ -412,7 +410,7 @@ mod tests {
     #[test]
     fn should_fail_parsing_without_signature_when_expected() {
         let mut header = super::Header::negociate();
-        header.flags.set(Flags::SMB2_FLAGS_SIGNED, false);
+        header.flags.set(super::Flags::SMB2_FLAGS_SIGNED, false);
         header.signature[0] = 1;
         let encoded = header.encode();
         let err = super::Header::parse(&encoded).unwrap_err();
@@ -444,7 +442,9 @@ mod tests {
             reserved: 0,
             tree_id: 42,
         };
-        header.flags.set(Flags::SMB2_FLAGS_SERVER_TO_REDIR, true);
+        header
+            .flags
+            .set(super::Flags::SMB2_FLAGS_SERVER_TO_REDIR, true);
         let encoded = header.encode();
         let _ = super::Header::parse(&encoded).unwrap();
     }
