@@ -232,6 +232,10 @@ impl<'a> Request<'a> {
             .map(u16_from_le_bytes)
             .map(|value| Dialect::try_from(value).map_err(ParseError::InvalidDialect))
     }
+
+    pub fn negotiate_contexts(&self) -> NegotiateContextIterator<'a> {
+        NegotiateContextIterator::new(self.negotiate_contexts)
+    }
 }
 
 impl<'a> Request<'a> {
@@ -280,6 +284,10 @@ impl<'a> Request<'a> {
 pub struct NegotiateContextIterator<'a>(BufferIterator<'a>);
 
 impl<'a> NegotiateContextIterator<'a> {
+    pub fn new(buf: &'a [u8]) -> Self {
+        Self(BufferIterator(buf))
+    }
+
     pub fn try_next(&mut self) -> Result<Option<NegotiateContext<'a>>, ParseError> {
         if self.0.0.is_empty() {
             return Ok(None);
@@ -851,6 +859,27 @@ impl<'a> SigningCapabilities<'a> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn should_parse_negotiate_context() {
+        use crate::entities::v2::negotiate::request::NegotiateContextIterator;
+
+        let buf: [u8; _] = [
+            6, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 4, 0, 0, 0, 0, 0, 1, 0, 0, 0,
+        ];
+        let mut it = NegotiateContextIterator::new(&buf);
+        let first = it.try_next().unwrap().unwrap();
+        assert!(matches!(
+            first,
+            super::NegotiateContext::TransportCapabilities(_)
+        ));
+        let second = it.try_next().unwrap().unwrap();
+        assert!(matches!(
+            second,
+            super::NegotiateContext::SigningCapabilities(_)
+        ));
+        assert_eq!(it.try_next(), Ok(None));
+    }
     #[test]
     fn should_fail_parse_signing_capabilities_invalid_algorithm() {
         let cap = super::SigningCapabilities::parse(&[1, 0, 42, 0]).unwrap();
