@@ -20,3 +20,9 @@ const fn u64_from_le_bytes(buf: &[u8]) -> u64 {
     res.copy_from_slice(buf);
     u64::from_le_bytes(res)
 }
+
+const fn u128_from_le_bytes(buf: &[u8]) -> u128 {
+    let mut res = [0u8; 16];
+    res.copy_from_slice(buf);
+    u128::from_le_bytes(res)
+}
