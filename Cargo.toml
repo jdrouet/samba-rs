@@ -5,6 +5,11 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 
+[[bench]]
+name = "netbios"
+harness = false
+
 [dependencies]
 bitflags = "2.10"
+criterion = "0.5"
 thiserror = "2.0"
