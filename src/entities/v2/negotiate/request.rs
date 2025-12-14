@@ -1,4 +1,6 @@
-//! https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e14db7ff-763a-4263-8b10-0c3944f52fc5
+//! Samba v2 negotiate request
+//!
+//! Related doc <https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e14db7ff-763a-4263-8b10-0c3944f52fc5>
 
 use std::str::Utf8Error;
 
