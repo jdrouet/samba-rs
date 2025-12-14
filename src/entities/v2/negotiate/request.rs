@@ -12,6 +12,8 @@ pub enum ParseError {
     NoHashAlgorithmProvided,
     #[error("no encryption cipher provided")]
     NoEncryptionCipherProvided,
+    #[error("no RDMA transform provided")]
+    NoRDMATransformProvided,
     #[error("invalid structure size, expected 36, received {_0}")]
     InvalidStructureSize(u16),
     #[error("invalid dialect {_0}")]
@@ -26,6 +28,8 @@ pub enum ParseError {
     InvalidEncryptionCipher(u16),
     #[error("invalid hash algorithm {_0}")]
     InvalidHashAlgorithm(u16),
+    #[error("invalid transform id {_0}")]
+    InvalidTransformId(u16),
     #[error("invalid unicode string")]
     InvalidUnicode(#[from] Utf8Error),
     #[error("unknown capabilities")]
@@ -346,6 +350,7 @@ pub enum NegotiateContext<'a> {
     CompressionCapabilities(CompressionCapabilities<'a>),
     NetNameNegotiateContextId(NetNameNegotiateContextId<'a>),
     TransportCapabilities(TransportCapabilities),
+    RDMATransformCapabilities(RDMATransformCapabilities<'a>),
 }
 
 impl<'a> NegotiateContext<'a> {
@@ -681,8 +686,109 @@ impl TransportCapabilities {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RDMATransformId {
+    /// SMB2_RDMA_TRANSFORM_NONE
+    ///
+    /// 0x0000
+    None,
+    /// SMB2_RDMA_TRANSFORM_ENCRYPTION
+    ///
+    /// 0x0001
+    ///
+    /// Encryption of data sent over RDMA.
+    Encryption,
+    /// SMB2_RDMA_TRANSFORM_SIGNING
+    ///
+    /// 0x0002
+    ///
+    /// Signing of data sent over RDMA.
+    Signing,
+}
+
+impl TryFrom<u16> for RDMATransformId {
+    type Error = u16;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0x0000 => Self::None,
+            0x0001 => Self::Encryption,
+            0x0002 => Self::Signing,
+            other => return Err(other),
+        })
+    }
+}
+
+/// The SMB2_RDMA_TRANSFORM_CAPABILITIES context is specified in an SMB2 NEGOTIATE request by
+/// the client to indicate the transforms supported when data is sent over RDMA.
+/// The format of the data in the Data field of this SMB2_NEGOTIATE_CONTEXT is as follows
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RDMATransformCapabilities<'a> {
+    /// TransformCount (2 bytes)
+    ///
+    /// The number of elements in RDMATransformIds array. This value MUST be greater than 0.
+    pub transform_count: u16,
+    /// RDMATransformIds (variable)
+    ///
+    /// An array of 16-bit integer IDs specifying the supported RDMA transforms.
+    /// The following IDs are defined.
+    pub transform_ids: &'a [u8],
+}
+
+impl<'a> RDMATransformCapabilities<'a> {
+    pub fn transform_ids(&self) -> impl Iterator<Item = Result<RDMATransformId, ParseError>> {
+        self.transform_ids
+            .chunks(2)
+            .map(u16_from_le_bytes)
+            .map(|value| RDMATransformId::try_from(value).map_err(ParseError::InvalidTransformId))
+    }
+}
+
+impl<'a> RDMATransformCapabilities<'a> {
+    pub fn parse(buf: &'a [u8]) -> Result<Self, ParseError> {
+        let transform_count = buf.get(0..2).ok_or(ParseError::BufferTooShort)?;
+        let transform_count = u16_from_le_bytes(transform_count);
+
+        if transform_count == 0 {
+            return Err(ParseError::NoRDMATransformProvided);
+        }
+
+        let end = 8 + (transform_count as usize) * 2;
+        let transform_ids = buf.get(8..end).ok_or(ParseError::BufferTooShort)?;
+
+        Ok(Self {
+            transform_count,
+            transform_ids,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn should_fail_parse_transform_capabilities_invalid_id() {
+        let cap = super::RDMATransformCapabilities::parse(&[1, 0, 0, 0, 0, 0, 0, 0, 8, 0]).unwrap();
+        let err = cap.transform_ids().next().unwrap().unwrap_err();
+        assert_eq!(err, super::ParseError::InvalidTransformId(8));
+    }
+    #[test]
+    fn should_fail_parse_transform_capabilities_buffer_too_small() {
+        let err = super::RDMATransformCapabilities::parse(&[1]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::RDMATransformCapabilities::parse(&[1, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+    }
+    #[test]
+    fn should_fail_parse_transform_capabilities_empty() {
+        let err = super::RDMATransformCapabilities::parse(&[0, 0, 0, 0, 0, 0, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::NoRDMATransformProvided);
+    }
+    #[test]
+    fn should_parse_transform_capabilities() {
+        let cap = super::RDMATransformCapabilities::parse(&[1, 0, 0, 0, 0, 0, 0, 0, 1, 0]).unwrap();
+        let _ = cap.transform_ids().collect::<Vec<_>>();
+    }
+
     #[test]
     fn should_parse_transport_capabilities() {
         let cap = super::TransportCapabilities::parse(&[0, 0, 0, 0]).unwrap();
