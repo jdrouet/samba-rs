@@ -10,6 +10,8 @@ pub enum ParseError {
     BufferTooShort,
     #[error("no hash algorithm provided")]
     NoHashAlgorithmProvided,
+    #[error("no hash signing provided")]
+    NoSigningAlgorithmProvided,
     #[error("no encryption cipher provided")]
     NoEncryptionCipherProvided,
     #[error("no RDMA transform provided")]
@@ -30,6 +32,8 @@ pub enum ParseError {
     InvalidHashAlgorithm(u16),
     #[error("invalid transform id {_0}")]
     InvalidTransformId(u16),
+    #[error("invalid signing algorithm {_0}")]
+    InvalidSigningAlgorithm(u16),
     #[error("invalid unicode string")]
     InvalidUnicode(#[from] Utf8Error),
     #[error("unknown capabilities")]
@@ -763,8 +767,103 @@ impl<'a> RDMATransformCapabilities<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SigningAlgorithm {
+    /// 0x0000 HMAC-SHA256
+    HmacSha256,
+    /// 0x0001 AES-CMAC
+    AesCmac,
+    /// 0x0002 AES-GMAC
+    AesGmac,
+}
+
+impl TryFrom<u16> for SigningAlgorithm {
+    type Error = u16;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0x0000 => Self::HmacSha256,
+            0x0001 => Self::AesCmac,
+            0x0002 => Self::AesGmac,
+            other => return Err(other),
+        })
+    }
+}
+
+/// The SMB2_SIGNING_CAPABILITIES context is specified in an SMB2 NEGOTIATE request by
+/// the client to indicate which signing algorithms the client supports. The format of
+/// the data in the Data field of this SMB2_NEGOTIATE_CONTEXT is as follows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SigningCapabilities<'a> {
+    /// SigningAlgorithmCount (2 bytes)
+    /// The number of signing algorithms in the SigningAlgorithms array.
+    /// This value MUST be greater than zero.
+    pub signing_algorithm_count: u16,
+    /// SigningAlgorithms (variable)
+    ///
+    /// An array of 16-bit integer IDs specifying the supported signing algorithms.
+    /// These IDs MUST be in an order such that the most preferred signing algorithm
+    /// MUST be at the beginning of the array and least preferred signing algorithm
+    /// at the end of the array. The following IDs are defined.
+    pub signing_algorithms: &'a [u8],
+}
+
+impl<'a> SigningCapabilities<'a> {
+    pub fn signing_algorithms(&self) -> impl Iterator<Item = Result<SigningAlgorithm, ParseError>> {
+        self.signing_algorithms
+            .chunks(2)
+            .map(u16_from_le_bytes)
+            .map(|value| {
+                SigningAlgorithm::try_from(value).map_err(ParseError::InvalidSigningAlgorithm)
+            })
+    }
+}
+
+impl<'a> SigningCapabilities<'a> {
+    pub fn parse(buf: &'a [u8]) -> Result<Self, ParseError> {
+        let signing_algorithm_count = buf.get(0..2).ok_or(ParseError::BufferTooShort)?;
+        let signing_algorithm_count = u16_from_le_bytes(signing_algorithm_count);
+
+        if signing_algorithm_count == 0 {
+            return Err(ParseError::NoSigningAlgorithmProvided);
+        }
+
+        let end = 2 + (signing_algorithm_count as usize) * 2;
+        let signing_algorithms = buf.get(2..end).ok_or(ParseError::BufferTooShort)?;
+
+        Ok(Self {
+            signing_algorithm_count,
+            signing_algorithms,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn should_fail_parse_signing_capabilities_invalid_algorithm() {
+        let cap = super::SigningCapabilities::parse(&[1, 0, 42, 0]).unwrap();
+        let err = cap.signing_algorithms().next().unwrap().unwrap_err();
+        assert_eq!(err, super::ParseError::InvalidSigningAlgorithm(42));
+    }
+    #[test]
+    fn should_fail_parse_signing_capabilities_empty() {
+        let err = super::SigningCapabilities::parse(&[0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::NoSigningAlgorithmProvided);
+    }
+    #[test]
+    fn should_fail_parse_signing_capabilities_invalid_size() {
+        let err = super::SigningCapabilities::parse(&[0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::SigningCapabilities::parse(&[1, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+    }
+    #[test]
+    fn should_parse_signing_capabilities() {
+        let cap = super::SigningCapabilities::parse(&[1, 0, 0, 0]).unwrap();
+        let _ = cap.signing_algorithms().collect::<Vec<_>>();
+    }
+
     #[test]
     fn should_fail_parse_transform_capabilities_invalid_id() {
         let cap = super::RDMATransformCapabilities::parse(&[1, 0, 0, 0, 0, 0, 0, 0, 8, 0]).unwrap();
