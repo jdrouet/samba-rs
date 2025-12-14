@@ -1,15 +1,21 @@
 //! https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/e14db7ff-763a-4263-8b10-0c3944f52fc5
 
-use crate::entities::{u16_from_le_bytes, u32_from_le_bytes, u128_from_le_bytes};
+use crate::entities::{BufferIterator, u16_from_le_bytes, u32_from_le_bytes, u128_from_le_bytes};
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 pub enum ParseError {
     #[error("buffer too short")]
     BufferTooShort,
+    #[error("no hash algorithm provided")]
+    NoHashAlgorithmProvided,
     #[error("invalid structure size, expected 36, received {_0}")]
     InvalidStructureSize(u16),
     #[error("invalid dialect {_0}")]
     InvalidDialect(u16),
+    #[error("invalid context type {_0}")]
+    InvalidContextType(u16),
+    #[error("invalid hash algorithm {_0}")]
+    InvalidHashAlgorithm(u16),
     #[error("unknown capabilities")]
     UnknownCapabilities,
     #[error("unknown security modes")]
@@ -127,7 +133,7 @@ impl<'a> DialectList<'a> {
     pub fn iter(&self) -> impl Iterator<Item = Result<Dialect, ParseError>> {
         self.0
             .chunks(2)
-            .map(|items| u16_from_le_bytes(items))
+            .map(u16_from_le_bytes)
             .map(|value| Dialect::try_from(value).map_err(ParseError::InvalidDialect))
     }
 }
@@ -252,5 +258,223 @@ impl<'a> Request<'a> {
             dialects,
             negotiate_contexts,
         })
+    }
+}
+
+pub struct NegotiateContextIterator<'a>(BufferIterator<'a>);
+
+impl<'a> NegotiateContextIterator<'a> {
+    pub fn try_next(&mut self) -> Result<Option<NegotiateContext<'a>>, ParseError> {
+        if self.0.0.is_empty() {
+            return Ok(None);
+        }
+
+        NegotiateContext::parse(&mut self.0).map(Some)
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u16)]
+pub enum NegotiateContextType {
+    /// The Data field contains a list of preauthentication integrity hash functions
+    /// as well as an optional salt value, as specified in section 2.2.3.1.1.
+    PreauthIntegrityCapabilities = 0x0001,
+    /// The Data field contains a list of encryption algorithms, as specified in section 2.2.3.1.2.
+    EncryptionCapabilities = 0x0002,
+    /// The Data field contains a list of compression algorithms, as specified in section 2.2.3.1.3.
+    CompressionCapabilities = 0x0003,
+    /// The Data field contains the server name to which the client connects.
+    NetNameNegotiateContextId = 0x0005,
+    /// The Data field contains transport capabilities, as specified in section 2.2.3.1.5.
+    TransportCapabilities = 0x0006,
+    /// The Data field contains a list of RDMA transforms, as specified in section 2.2.3.1.6.
+    RDMATransformCapabilities = 0x0007,
+    /// The Data field contains a list of signing algorithms, as specified in section 2.2.3.1.7.
+    SigningCapabilities = 0x0008,
+    /// This value MUST be reserved and MUST be ignored on receipt.
+    ContextTypeReserved = 0x0100,
+}
+
+impl TryFrom<u16> for NegotiateContextType {
+    type Error = u16;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0x0001 => Self::PreauthIntegrityCapabilities,
+            0x0002 => Self::EncryptionCapabilities,
+            0x0003 => Self::CompressionCapabilities,
+            0x0005 => Self::NetNameNegotiateContextId,
+            0x0006 => Self::TransportCapabilities,
+            0x0007 => Self::RDMATransformCapabilities,
+            0x0008 => Self::SigningCapabilities,
+            0x1000 => Self::ContextTypeReserved,
+            other => return Err(other),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NegotiateContextRaw<'a> {
+    /// ContextType (2 bytes)
+    ///
+    /// Specifies the type of context in the Data field. This field MUST be one of the following values.
+    pub context_type: NegotiateContextType,
+    /// DataLength (2 bytes)
+    ///
+    /// The length, in bytes, of the Data field.
+    pub data_length: u16,
+    // Reserved (4 bytes): This field MUST NOT be used and MUST be reserved.
+    // This value MUST be set to 0 by the client, and MUST be ignored by the server.
+    /// Data (variable)
+    ///
+    /// A variable-length field that contains the negotiate context specified by the ContextType field.
+    pub data: &'a [u8],
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NegotiateContext<'a> {
+    PreauthIntegrityCapabilities(PreauthIntegrityCapabilities<'a>),
+}
+
+impl<'a> NegotiateContext<'a> {
+    pub(super) fn parse(it: &mut BufferIterator<'a>) -> Result<Self, ParseError> {
+        let context_type = it.next_u16().ok_or(ParseError::BufferTooShort)?;
+        let context_type =
+            NegotiateContextType::try_from(context_type).map_err(ParseError::InvalidContextType)?;
+
+        let data_length = it.next_u16().ok_or(ParseError::BufferTooShort)?;
+        // skip reserved
+        it.next(4).ok_or(ParseError::BufferTooShort)?;
+        let buf = it
+            .next(data_length as usize)
+            .ok_or(ParseError::BufferTooShort)?;
+        match context_type {
+            NegotiateContextType::PreauthIntegrityCapabilities => {
+                PreauthIntegrityCapabilities::parse(buf)
+                    .map(NegotiateContext::PreauthIntegrityCapabilities)
+            }
+            _ => todo!(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u16)]
+pub enum HashAlgorithm {
+    /// SHA-512 as specified in [FIPS180-4]
+    Sha512 = 0x0001,
+}
+
+impl TryFrom<u16> for HashAlgorithm {
+    type Error = u16;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0x0001 => Self::Sha512,
+            other => return Err(other),
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HashAlgorithmList<'a>(pub &'a [u8]);
+
+impl<'a> HashAlgorithmList<'a> {
+    pub fn iter(&self) -> impl Iterator<Item = Result<HashAlgorithm, ParseError>> {
+        self.0
+            .chunks(2)
+            .map(u16_from_le_bytes)
+            .map(|value| HashAlgorithm::try_from(value).map_err(ParseError::InvalidHashAlgorithm))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PreauthIntegrityCapabilities<'a> {
+    /// HashAlgorithmCount (2 bytes)
+    ///
+    /// The number of hash algorithms in the HashAlgorithms array. This value MUST be greater than zero.
+    pub hash_algorithm_count: u16,
+    /// SaltLength (2 bytes)
+    ///
+    /// The size, in bytes, of the Salt field.
+    pub salt_length: u16,
+    /// HashAlgorithms (variable)
+    ///
+    /// An array of HashAlgorithmCount 16-bit integer IDs specifying the supported preauthentication
+    /// integrity hash functions. The following IDs are defined.
+    pub hash_algorithms: HashAlgorithmList<'a>,
+    /// Salt (variable)
+    ///
+    /// A buffer containing the salt value of the hash.
+    pub salt: &'a [u8],
+}
+
+impl<'a> PreauthIntegrityCapabilities<'a> {
+    pub fn parse(buf: &'a [u8]) -> Result<Self, ParseError> {
+        let hash_algorithm_count = buf
+            .get(0..2)
+            .map(u16_from_le_bytes)
+            .ok_or(ParseError::BufferTooShort)?;
+        if hash_algorithm_count == 0 {
+            return Err(ParseError::NoHashAlgorithmProvided);
+        }
+
+        let salt_length = buf
+            .get(2..4)
+            .map(u16_from_le_bytes)
+            .ok_or(ParseError::BufferTooShort)?;
+
+        let hash_algorithms_end = (4 + hash_algorithm_count * 2) as usize;
+        let hash_algorithms = buf
+            .get(4..hash_algorithms_end)
+            .ok_or(ParseError::BufferTooShort)?;
+        let hash_algorithms = HashAlgorithmList(hash_algorithms);
+
+        let salt_end = hash_algorithms_end + (salt_length as usize);
+        let salt = buf
+            .get(hash_algorithms_end..salt_end)
+            .ok_or(ParseError::BufferTooShort)?;
+
+        Ok(Self {
+            hash_algorithm_count,
+            salt_length,
+            hash_algorithms,
+            salt,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn should_parse_preauth_integrity_capabilities() {
+        super::PreauthIntegrityCapabilities::parse(&[1, 0, 0, 0, 1, 0]).unwrap();
+    }
+
+    #[test]
+    fn should_fail_parse_preauth_integrity_capabilities_small_buffer() {
+        let err = super::PreauthIntegrityCapabilities::parse(&[1]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::PreauthIntegrityCapabilities::parse(&[1, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::PreauthIntegrityCapabilities::parse(&[1, 0, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::PreauthIntegrityCapabilities::parse(&[1, 0, 1, 0, 1]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::PreauthIntegrityCapabilities::parse(&[1, 0, 2, 0, 1, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+    }
+
+    #[test]
+    fn should_fail_parse_preauth_integrity_capabilities_without_hash_algorithm() {
+        let err = super::PreauthIntegrityCapabilities::parse(&[0, 0, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::NoHashAlgorithmProvided);
+    }
+
+    #[test]
+    fn should_fail_parse_preauth_integrity_capabilities_with_invalid_hash_algorithm() {
+        let value = super::PreauthIntegrityCapabilities::parse(&[1, 0, 0, 0, 4, 0]).unwrap();
+        let err = value.hash_algorithms.iter().next().unwrap().unwrap_err();
+        assert_eq!(err, super::ParseError::InvalidHashAlgorithm(4));
     }
 }
