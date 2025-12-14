@@ -8,12 +8,16 @@ pub enum ParseError {
     BufferTooShort,
     #[error("no hash algorithm provided")]
     NoHashAlgorithmProvided,
+    #[error("no encryption cipher provided")]
+    NoEncryptionCipherProvided,
     #[error("invalid structure size, expected 36, received {_0}")]
     InvalidStructureSize(u16),
     #[error("invalid dialect {_0}")]
     InvalidDialect(u16),
     #[error("invalid context type {_0}")]
     InvalidContextType(u16),
+    #[error("invalid encryption cipher {_0}")]
+    InvalidEncryptionCipher(u16),
     #[error("invalid hash algorithm {_0}")]
     InvalidHashAlgorithm(u16),
     #[error("unknown capabilities")]
@@ -127,21 +131,6 @@ impl TryFrom<u16> for Dialect {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct DialectList<'a>(pub &'a [u8]);
-
-impl<'a> DialectList<'a> {
-    pub fn iter(&self) -> impl Iterator<Item = Result<Dialect, ParseError>> {
-        self.0
-            .chunks(2)
-            .map(u16_from_le_bytes)
-            .map(|value| Dialect::try_from(value).map_err(ParseError::InvalidDialect))
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct NegotiateContextList<'a>(pub &'a [u8]);
-
-#[derive(Clone, Copy, Debug)]
 pub struct Request<'a> {
     /// StructureSize (2 bytes)
     ///
@@ -208,14 +197,23 @@ pub struct Request<'a> {
     ///
     /// An array of one or more 16-bit integers specifying the supported dialect revision numbers.
     /// The array MUST contain at least one of the following values.
-    pub dialects: DialectList<'a>,
+    pub dialects: &'a [u8],
     /// NegotiateContextList (variable)
     ///
     /// If the Dialects field contains 0x0311, then this field will contain an array of SMB2 NEGOTIATE_CONTEXTs.
     /// The first negotiate context in the list MUST appear at the byte offset indicated by the SMB2 NEGOTIATE
     /// request's NegotiateContextOffset field. Subsequent negotiate contexts MUST appear at
     /// the first 8-byte-aligned offset following the previous negotiate context.
-    pub negotiate_contexts: NegotiateContextList<'a>,
+    pub negotiate_contexts: &'a [u8],
+}
+
+impl<'a> Request<'a> {
+    pub fn dialects(&self) -> impl Iterator<Item = Result<Dialect, ParseError>> {
+        self.dialects
+            .chunks(2)
+            .map(u16_from_le_bytes)
+            .map(|value| Dialect::try_from(value).map_err(ParseError::InvalidDialect))
+    }
 }
 
 impl<'a> Request<'a> {
@@ -243,10 +241,10 @@ impl<'a> Request<'a> {
         if buf.len() < dialects_end {
             return Err(ParseError::BufferTooShort);
         }
-        let dialects = DialectList(&buf[dialects_start..dialects_end]);
+        let dialects = &buf[dialects_start..dialects_end];
         // padding
         let negotiate_context_start = (negotiate_context_offset - 64) as usize; // remove header
-        let negotiate_contexts = NegotiateContextList(&buf[negotiate_context_start..]);
+        let negotiate_contexts = &buf[negotiate_context_start..];
 
         Ok(Self {
             dialect_count,
@@ -334,6 +332,7 @@ pub struct NegotiateContextRaw<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NegotiateContext<'a> {
     PreauthIntegrityCapabilities(PreauthIntegrityCapabilities<'a>),
+    EncryptionCapabilities(EncryptionCapabilities<'a>),
 }
 
 impl<'a> NegotiateContext<'a> {
@@ -352,6 +351,9 @@ impl<'a> NegotiateContext<'a> {
             NegotiateContextType::PreauthIntegrityCapabilities => {
                 PreauthIntegrityCapabilities::parse(buf)
                     .map(NegotiateContext::PreauthIntegrityCapabilities)
+            }
+            NegotiateContextType::EncryptionCapabilities => {
+                EncryptionCapabilities::parse(buf).map(NegotiateContext::EncryptionCapabilities)
             }
             _ => todo!(),
         }
@@ -377,18 +379,6 @@ impl TryFrom<u16> for HashAlgorithm {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct HashAlgorithmList<'a>(pub &'a [u8]);
-
-impl<'a> HashAlgorithmList<'a> {
-    pub fn iter(&self) -> impl Iterator<Item = Result<HashAlgorithm, ParseError>> {
-        self.0
-            .chunks(2)
-            .map(u16_from_le_bytes)
-            .map(|value| HashAlgorithm::try_from(value).map_err(ParseError::InvalidHashAlgorithm))
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PreauthIntegrityCapabilities<'a> {
     /// HashAlgorithmCount (2 bytes)
     ///
@@ -402,11 +392,20 @@ pub struct PreauthIntegrityCapabilities<'a> {
     ///
     /// An array of HashAlgorithmCount 16-bit integer IDs specifying the supported preauthentication
     /// integrity hash functions. The following IDs are defined.
-    pub hash_algorithms: HashAlgorithmList<'a>,
+    pub hash_algorithms: &'a [u8],
     /// Salt (variable)
     ///
     /// A buffer containing the salt value of the hash.
     pub salt: &'a [u8],
+}
+
+impl<'a> PreauthIntegrityCapabilities<'a> {
+    pub fn hash_algorithms(&self) -> impl Iterator<Item = Result<HashAlgorithm, ParseError>> {
+        self.hash_algorithms
+            .chunks(2)
+            .map(u16_from_le_bytes)
+            .map(|value| HashAlgorithm::try_from(value).map_err(ParseError::InvalidHashAlgorithm))
+    }
 }
 
 impl<'a> PreauthIntegrityCapabilities<'a> {
@@ -428,7 +427,6 @@ impl<'a> PreauthIntegrityCapabilities<'a> {
         let hash_algorithms = buf
             .get(4..hash_algorithms_end)
             .ok_or(ParseError::BufferTooShort)?;
-        let hash_algorithms = HashAlgorithmList(hash_algorithms);
 
         let salt_end = hash_algorithms_end + (salt_length as usize);
         let salt = buf
@@ -444,11 +442,78 @@ impl<'a> PreauthIntegrityCapabilities<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u16)]
+pub enum EncryptionCipher {
+    Aes128Ccm = 0x0001,
+    Aes128Gcm = 0x0002,
+    Aes256Ccm = 0x0003,
+    Aes256Gcm = 0x0004,
+}
+
+impl TryFrom<u16> for EncryptionCipher {
+    type Error = u16;
+
+    fn try_from(value: u16) -> Result<Self, Self::Error> {
+        Ok(match value {
+            0x0001 => Self::Aes128Ccm,
+            0x0002 => Self::Aes128Gcm,
+            0x0003 => Self::Aes256Ccm,
+            0x0004 => Self::Aes256Gcm,
+            other => return Err(other),
+        })
+    }
+}
+
+impl EncryptionCipher {
+    #[inline]
+    pub const fn to_u16(&self) -> u16 {
+        *self as u16
+    }
+}
+
+/// The SMB2_ENCRYPTION_CAPABILITIES context is specified in an SMB2 NEGOTIATE request by the client to
+/// indicate which encryption algorithms the client supports. The format of the data in the Data field of this
+// SMB2_NEGOTIATE_CONTEXT is as follows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EncryptionCapabilities<'a> {
+    pub cipher_count: u16,
+    pub ciphers: &'a [u8],
+}
+
+impl<'a> EncryptionCapabilities<'a> {
+    pub fn ciphers(&self) -> impl Iterator<Item = Result<EncryptionCipher, ParseError>> {
+        self.ciphers.chunks(2).map(u16_from_le_bytes).map(|value| {
+            EncryptionCipher::try_from(value).map_err(ParseError::InvalidEncryptionCipher)
+        })
+    }
+}
+
+impl<'a> EncryptionCapabilities<'a> {
+    pub fn parse(buf: &'a [u8]) -> Result<Self, ParseError> {
+        let cipher_count = buf
+            .get(0..2)
+            .map(u16_from_le_bytes)
+            .ok_or(ParseError::BufferTooShort)?;
+        if cipher_count == 0 {
+            return Err(ParseError::NoEncryptionCipherProvided);
+        }
+
+        let ciphers_end = 2 + (cipher_count * 2) as usize;
+        let ciphers = buf.get(2..ciphers_end).ok_or(ParseError::BufferTooShort)?;
+        Ok(Self {
+            cipher_count,
+            ciphers,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
     fn should_parse_preauth_integrity_capabilities() {
-        super::PreauthIntegrityCapabilities::parse(&[1, 0, 0, 0, 1, 0]).unwrap();
+        let cap = super::PreauthIntegrityCapabilities::parse(&[1, 0, 0, 0, 1, 0]).unwrap();
+        let _ = cap.hash_algorithms.iter().collect::<Vec<_>>();
     }
 
     #[test]
@@ -474,7 +539,56 @@ mod tests {
     #[test]
     fn should_fail_parse_preauth_integrity_capabilities_with_invalid_hash_algorithm() {
         let value = super::PreauthIntegrityCapabilities::parse(&[1, 0, 0, 0, 4, 0]).unwrap();
-        let err = value.hash_algorithms.iter().next().unwrap().unwrap_err();
+        let err = value.hash_algorithms().next().unwrap().unwrap_err();
         assert_eq!(err, super::ParseError::InvalidHashAlgorithm(4));
+    }
+
+    #[test]
+    fn should_parse_encryption_capabilities() {
+        let cap = super::EncryptionCapabilities::parse(&[1, 0, 1, 0]).unwrap();
+        let _ = cap.ciphers().collect::<Vec<_>>();
+    }
+
+    #[test]
+    fn should_fail_parse_encryption_capabilities_invalid_size() {
+        let err = super::EncryptionCapabilities::parse(&[]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::EncryptionCapabilities::parse(&[1, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::EncryptionCapabilities::parse(&[2, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::EncryptionCapabilities::parse(&[2, 0, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        let err = super::EncryptionCapabilities::parse(&[2, 0, 0, 0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+    }
+
+    #[test]
+    fn should_fail_parse_encryption_capabilities_empty() {
+        let err = super::EncryptionCapabilities::parse(&[0, 0]).unwrap_err();
+        assert_eq!(err, super::ParseError::NoEncryptionCipherProvided);
+    }
+
+    #[test]
+    fn should_parse_cipher() {
+        for cipher in [
+            super::EncryptionCipher::Aes128Ccm,
+            super::EncryptionCipher::Aes128Gcm,
+            super::EncryptionCipher::Aes256Ccm,
+            super::EncryptionCipher::Aes256Gcm,
+        ] {
+            assert_eq!(
+                cipher,
+                super::EncryptionCipher::try_from(cipher.to_u16()).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn should_fail_parse_unknown_cipher() {
+        assert_eq!(0, super::EncryptionCipher::try_from(0).unwrap_err());
+        for value in 5u16..=u16::MAX {
+            assert_eq!(value, super::EncryptionCipher::try_from(value).unwrap_err());
+        }
     }
 }
