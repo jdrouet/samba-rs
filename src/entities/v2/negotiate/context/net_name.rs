@@ -26,6 +26,10 @@ impl NetNameNegotiateContextIdBuilder {
         Self { value }
     }
 
+    pub fn size(&self) -> usize {
+        self.value.len()
+    }
+
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         buf.write(self.value.as_bytes())?;
         Ok(())

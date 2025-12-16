@@ -97,6 +97,10 @@ impl SigningCapabilitiesBuilder {
         self
     }
 
+    pub fn size(&self) -> usize {
+        2 + self.signing_algorithms.len() * 2
+    }
+
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         if self.signing_algorithms.is_empty() {
             return Err(EncodeError::NoSigningAlgorithmProvided);

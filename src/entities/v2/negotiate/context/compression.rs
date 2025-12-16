@@ -150,6 +150,10 @@ impl CompressionCapabilitiesBuilder {
         self
     }
 
+    pub fn size(&self) -> usize {
+        8 + self.compression_algorithms.len() * 2
+    }
+
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         let length = u16::try_from(self.compression_algorithms.len())
             .map_err(|_| EncodeError::NumberOutOfBound)?;

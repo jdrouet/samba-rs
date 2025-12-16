@@ -81,6 +81,10 @@ impl EncryptionCapabilitiesBuilder {
         self
     }
 
+    pub fn size(&self) -> usize {
+        2 + self.ciphers.len() * 2
+    }
+
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         let length =
             u16::try_from(self.ciphers.len()).map_err(|_| EncodeError::NumberOutOfBound)?;

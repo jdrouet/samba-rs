@@ -1,5 +1,5 @@
 use crate::entities::BufferIterator;
-use crate::entities::v2::negotiate::request::ParseError;
+use crate::entities::v2::negotiate::request::{EncodeError, ParseError};
 
 pub mod compression;
 pub mod encryption;
@@ -10,7 +10,6 @@ pub mod signing;
 pub mod transport;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u16)]
 pub enum NegotiateContextType {
     /// The Data field contains a list of preauthentication integrity hash functions
     /// as well as an optional salt value, as specified in section 2.2.3.1.1.
@@ -66,7 +65,6 @@ impl<'a> NegotiateContext<'a> {
         let context_type = it.next_u16().ok_or(ParseError::BufferTooShort)?;
         let context_type =
             NegotiateContextType::try_from(context_type).map_err(ParseError::InvalidContextType)?;
-
         let data_length = it.next_u16().ok_or(ParseError::BufferTooShort)?;
         // skip reserved
         it.next(4).ok_or(ParseError::BufferTooShort)?;
@@ -134,6 +132,59 @@ pub enum NegotiateContextBuilder {
     RDMATransformCapabilities(rdma_transform::RDMATransformCapabilitiesBuilder),
     SigningCapabilities(signing::SigningCapabilitiesBuilder),
     ContextTypeReserved(Vec<u8>),
+}
+
+impl NegotiateContextBuilder {
+    fn inner_size(&self) -> usize {
+        match self {
+            Self::PreauthIntegrityCapabilities(inner) => inner.size(),
+            Self::EncryptionCapabilities(inner) => inner.size(),
+            Self::CompressionCapabilities(inner) => inner.size(),
+            Self::NetNameNegotiateContextId(inner) => inner.size(),
+            Self::TransportCapabilities(inner) => inner.size(),
+            Self::RDMATransformCapabilities(inner) => inner.size(),
+            Self::SigningCapabilities(inner) => inner.size(),
+            Self::ContextTypeReserved(inner) => inner.len(),
+        }
+    }
+
+    pub fn size(&self) -> usize {
+        // context_type (2) + data_length (2) + gap (4)
+        self.inner_size() + 8
+    }
+
+    const fn to_u16(&self) -> u16 {
+        match self {
+            Self::PreauthIntegrityCapabilities(_) => 0x0001,
+            Self::EncryptionCapabilities(_) => 0x0002,
+            Self::CompressionCapabilities(_) => 0x0003,
+            Self::NetNameNegotiateContextId(_) => 0x0005,
+            Self::TransportCapabilities(_) => 0x0006,
+            Self::RDMATransformCapabilities(_) => 0x0007,
+            Self::SigningCapabilities(_) => 0x0008,
+            Self::ContextTypeReserved(_) => 0x0100,
+        }
+    }
+
+    pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        buf.write(&self.to_u16().to_le_bytes())?;
+        let data_length =
+            u16::try_from(self.inner_size()).map_err(|_| EncodeError::NumberOutOfBound)?;
+        buf.write(&data_length.to_le_bytes())?;
+        buf.write(&[0, 0, 0, 0])?;
+        match self {
+            Self::PreauthIntegrityCapabilities(inner) => inner.encode(buf),
+            Self::EncryptionCapabilities(inner) => inner.encode(buf),
+            Self::CompressionCapabilities(inner) => inner.encode(buf),
+            Self::NetNameNegotiateContextId(inner) => inner.encode(buf),
+            Self::TransportCapabilities(inner) => inner.encode(buf),
+            Self::RDMATransformCapabilities(inner) => inner.encode(buf),
+            Self::SigningCapabilities(inner) => inner.encode(buf),
+            Self::ContextTypeReserved(inner) => {
+                buf.write(&inner).map(|_| ()).map_err(EncodeError::from)
+            }
+        }
+    }
 }
 
 #[cfg(test)]

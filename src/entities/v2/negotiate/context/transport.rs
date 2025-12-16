@@ -34,6 +34,10 @@ impl TransportCapabilitiesBuilder {
         Self { flags }
     }
 
+    pub fn size(&self) -> usize {
+        4
+    }
+
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         buf.write(&self.flags.bits().to_le_bytes())?;
         Ok(())

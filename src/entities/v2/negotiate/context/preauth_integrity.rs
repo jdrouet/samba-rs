@@ -107,6 +107,11 @@ impl PreauthIntegrityCapabilitiesBuilder {
         self
     }
 
+    pub fn size(&self) -> usize {
+        // hash_algorithm_count(2) + salt_length(2) + hash_algorithm_count * 2 + salt_length
+        4 + self.hash_algorithms.len() * 2 + self.salt.len()
+    }
+
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         if self.hash_algorithms.is_empty() {
             return Err(EncodeError::NoHashAlgorithmProvided);

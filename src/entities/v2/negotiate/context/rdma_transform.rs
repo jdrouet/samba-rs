@@ -103,6 +103,10 @@ impl RDMATransformCapabilitiesBuilder {
         self
     }
 
+    pub fn size(&self) -> usize {
+        8 + self.transform_ids.len() * 2
+    }
+
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         if self.transform_ids.is_empty() {
             return Err(EncodeError::NoRDMATransformProvided);
