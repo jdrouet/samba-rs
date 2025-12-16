@@ -12,4 +12,5 @@ harness = false
 [dependencies]
 bitflags = "2.10"
 criterion = "0.5"
+derive_more = { version = "2.1", features = ["from"] }
 thiserror = "2.0"

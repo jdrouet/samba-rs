@@ -90,7 +90,7 @@ impl<'a> PreauthIntegrityCapabilities<'a> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct PreauthIntegrityCapabilitiesBuilder {
     pub salt: Vec<u8>,
     pub hash_algorithms: Vec<HashAlgorithm>,

@@ -131,7 +131,7 @@ impl<'a> CompressionCapabilities<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CompressionCapabilitiesBuilder {
     pub flags: CompressionFlags,
     pub compression_algorithms: Vec<CompressionAlgorithm>,

@@ -124,6 +124,18 @@ impl<'a> NegotiateContextIterator<'a> {
     }
 }
 
+#[derive(Clone, Debug, derive_more::From)]
+pub enum NegotiateContextBuilder {
+    PreauthIntegrityCapabilities(preauth_integrity::PreauthIntegrityCapabilitiesBuilder),
+    EncryptionCapabilities(encryption::EncryptionCapabilitiesBuilder),
+    CompressionCapabilities(compression::CompressionCapabilitiesBuilder),
+    NetNameNegotiateContextId(net_name::NetNameNegotiateContextIdBuilder),
+    TransportCapabilities(transport::TransportCapabilitiesBuilder),
+    RDMATransformCapabilities(rdma_transform::RDMATransformCapabilitiesBuilder),
+    SigningCapabilities(signing::SigningCapabilitiesBuilder),
+    ContextTypeReserved(Vec<u8>),
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

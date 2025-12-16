@@ -92,7 +92,7 @@ impl<'a> RDMATransformCapabilities<'a> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct RDMATransformCapabilitiesBuilder {
     pub transform_ids: Vec<RDMATransformId>,
 }

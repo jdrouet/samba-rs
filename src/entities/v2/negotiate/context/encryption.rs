@@ -70,7 +70,7 @@ impl<'a> EncryptionCapabilities<'a> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct EncryptionCapabilitiesBuilder {
     pub ciphers: Vec<EncryptionCipher>,
 }

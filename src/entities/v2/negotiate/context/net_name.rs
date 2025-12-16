@@ -16,7 +16,7 @@ impl<'a> NetNameNegotiateContextId<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct NetNameNegotiateContextIdBuilder {
     pub value: String,
 }

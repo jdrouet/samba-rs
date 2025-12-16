@@ -86,7 +86,7 @@ impl<'a> SigningCapabilities<'a> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SigningCapabilitiesBuilder {
     pub signing_algorithms: Vec<SigningAlgorithm>,
 }
