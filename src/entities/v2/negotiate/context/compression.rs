@@ -1,4 +1,4 @@
-use crate::entities::v2::negotiate::request::ParseError;
+use crate::entities::v2::negotiate::request::{EncodeError, ParseError};
 use crate::entities::{u16_from_le_bytes, u32_from_le_bytes};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -18,6 +18,15 @@ impl TryFrom<u32> for CompressionFlags {
             0x01 => Self::Chained,
             other => return Err(other),
         })
+    }
+}
+
+impl CompressionFlags {
+    pub const fn to_u32(&self) -> u32 {
+        match self {
+            Self::None => 0x00,
+            Self::Chained => 0x01,
+        }
     }
 }
 
@@ -50,6 +59,19 @@ impl TryFrom<u16> for CompressionAlgorithm {
             0x0005 => Self::LZ4,
             other => return Err(other),
         })
+    }
+}
+
+impl CompressionAlgorithm {
+    pub const fn to_u16(&self) -> u16 {
+        match self {
+            Self::None => 0x0000,
+            Self::LZNT1 => 0x0001,
+            Self::LZ77 => 0x0002,
+            Self::LZ77Huffman => 0x0003,
+            Self::PatternV1 => 0x0004,
+            Self::LZ4 => 0x0005,
+        }
     }
 }
 
@@ -109,8 +131,54 @@ impl<'a> CompressionCapabilities<'a> {
     }
 }
 
+#[derive(Debug)]
+pub struct CompressionCapabilitiesBuilder {
+    pub flags: CompressionFlags,
+    pub compression_algorithms: Vec<CompressionAlgorithm>,
+}
+
+impl CompressionCapabilitiesBuilder {
+    pub fn new(flags: CompressionFlags) -> Self {
+        Self {
+            flags,
+            compression_algorithms: Default::default(),
+        }
+    }
+
+    pub fn with_algorithm(mut self, value: CompressionAlgorithm) -> Self {
+        self.compression_algorithms.push(value);
+        self
+    }
+
+    pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        let length = u16::try_from(self.compression_algorithms.len())
+            .map_err(|_| EncodeError::NumberOutOfBound)?;
+        buf.write(&length.to_le_bytes())?;
+        buf.write(&[0, 0u8])?;
+        buf.write(&self.flags.to_u32().to_le_bytes())?;
+        for item in &self.compression_algorithms {
+            buf.write(&item.to_u16().to_le_bytes())?;
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::io::BufWriter;
+
+    #[test]
+    fn should_encode_and_parse() {
+        let mut buf = BufWriter::new(Vec::with_capacity(1024));
+        super::CompressionCapabilitiesBuilder::new(super::CompressionFlags::None)
+            .with_algorithm(super::CompressionAlgorithm::LZ77Huffman)
+            .with_algorithm(super::CompressionAlgorithm::LZNT1)
+            .encode(&mut buf)
+            .unwrap();
+        let buf = buf.into_inner().unwrap();
+        let res = super::CompressionCapabilities::parse(&buf).unwrap();
+        assert_eq!(res.compression_algorithm_count, 2);
+    }
 
     #[test]
     fn should_parse() {

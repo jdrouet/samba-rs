@@ -50,6 +50,8 @@ pub enum ParseError {
 pub enum EncodeError {
     #[error("no RDMA transform provided")]
     NoRDMATransformProvided,
+    #[error("no hash algorithm provided")]
+    NoHashAlgorithmProvided,
     #[error("no signing algorithm provided")]
     NoSigningAlgorithmProvided,
     #[error("number ouf of bound")]

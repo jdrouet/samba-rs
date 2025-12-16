@@ -1,5 +1,5 @@
 use crate::entities::u32_from_le_bytes;
-use crate::entities::v2::negotiate::request::ParseError;
+use crate::entities::v2::negotiate::request::{EncodeError, ParseError};
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +24,19 @@ impl TransportCapabilities {
             .ok_or(ParseError::UnknownTransportFlags)?;
 
         Ok(Self { flags })
+    }
+}
+
+pub type TransportCapabilitiesBuilder = TransportCapabilities;
+
+impl TransportCapabilitiesBuilder {
+    pub fn new(flags: TransportFlags) -> Self {
+        Self { flags }
+    }
+
+    pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        buf.write(&self.flags.bits().to_le_bytes())?;
+        Ok(())
     }
 }
 

@@ -1,11 +1,10 @@
 use crate::entities::u16_from_le_bytes;
-use crate::entities::v2::negotiate::request::ParseError;
+use crate::entities::v2::negotiate::request::{EncodeError, ParseError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[repr(u16)]
 pub enum HashAlgorithm {
     /// SHA-512 as specified in [FIPS180-4]
-    Sha512 = 0x0001,
+    Sha512,
 }
 
 impl TryFrom<u16> for HashAlgorithm {
@@ -16,6 +15,14 @@ impl TryFrom<u16> for HashAlgorithm {
             0x0001 => Self::Sha512,
             other => return Err(other),
         })
+    }
+}
+
+impl HashAlgorithm {
+    pub fn to_u16(&self) -> u16 {
+        match self {
+            Self::Sha512 => 0x0001,
+        }
     }
 }
 
@@ -83,8 +90,62 @@ impl<'a> PreauthIntegrityCapabilities<'a> {
     }
 }
 
+#[derive(Debug, Default)]
+pub struct PreauthIntegrityCapabilitiesBuilder {
+    pub salt: Vec<u8>,
+    pub hash_algorithms: Vec<HashAlgorithm>,
+}
+
+impl PreauthIntegrityCapabilitiesBuilder {
+    pub fn with_hash_algorithm(mut self, value: HashAlgorithm) -> Self {
+        self.hash_algorithms.push(value);
+        self
+    }
+
+    pub fn with_salt(mut self, value: Vec<u8>) -> Self {
+        self.salt = value;
+        self
+    }
+
+    pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
+        if self.hash_algorithms.is_empty() {
+            return Err(EncodeError::NoHashAlgorithmProvided);
+        }
+
+        let hash_algorithm_count =
+            u16::try_from(self.hash_algorithms.len()).map_err(|_| EncodeError::NumberOutOfBound)?;
+        let salt_length =
+            u16::try_from(self.salt.len()).map_err(|_| EncodeError::NumberOutOfBound)?;
+
+        buf.write(&hash_algorithm_count.to_le_bytes())?;
+        buf.write(&salt_length.to_le_bytes())?;
+        for algorithm in &self.hash_algorithms {
+            buf.write(&algorithm.to_u16().to_le_bytes())?;
+        }
+        buf.write(self.salt.as_slice())?;
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::io::BufWriter;
+
+    #[test]
+    fn should_encode_and_parse() {
+        let mut buf = BufWriter::new(Vec::with_capacity(1024));
+        super::PreauthIntegrityCapabilitiesBuilder::default()
+            .with_hash_algorithm(super::HashAlgorithm::Sha512)
+            .with_salt(vec![1, 2, 3, 4])
+            .encode(&mut buf)
+            .unwrap();
+        let buf = buf.into_inner().unwrap();
+        let cap = super::PreauthIntegrityCapabilities::parse(&buf).unwrap();
+        assert_eq!(cap.hash_algorithm_count, 1);
+        assert_eq!(cap.salt_length, 4);
+        assert_eq!(cap.salt, &[1, 2, 3, 4]);
+    }
+
     #[test]
     fn should_parse() {
         let cap = super::PreauthIntegrityCapabilities::parse(&[1, 0, 0, 0, 1, 0]).unwrap();
