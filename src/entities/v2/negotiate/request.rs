@@ -442,6 +442,15 @@ impl RequestBuilder {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn should_convert_dialect_to_u16() {
+        assert_eq!(super::Dialect::Smb202.to_u16(), 0x0202);
+        assert_eq!(super::Dialect::Smb21.to_u16(), 0x0210);
+        assert_eq!(super::Dialect::Smb30.to_u16(), 0x0300);
+        assert_eq!(super::Dialect::Smb302.to_u16(), 0x0302);
+        assert_eq!(super::Dialect::Smb311.to_u16(), 0x0311);
+    }
+
+    #[test]
     fn should_encode_and_parse_empty_request() {
         let mut buf = Vec::with_capacity(1024);
         super::RequestBuilder::default().encode(&mut buf).unwrap();
@@ -474,6 +483,9 @@ mod tests {
 
         let mut buf = Vec::with_capacity(1024);
         super::RequestBuilder::default()
+            .with_client_guid(12345)
+            .with_security_mode(super::SecurityMode::SMB2_NEGOTIATE_SIGNING_ENABLED)
+            .with_capability(super::Capabilities::SMB2_GLOBAL_CAP_DFS)
             .with_negotiate_context(
                 TransportCapabilitiesBuilder::new(
                     TransportFlags::SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY,
@@ -489,6 +501,15 @@ mod tests {
             .encode(&mut buf)
             .unwrap();
         let req = super::Request::parse(&buf).unwrap();
+        assert!(
+            req.security_mode
+                .contains(super::SecurityMode::SMB2_NEGOTIATE_SIGNING_ENABLED)
+        );
+        assert!(
+            req.capabilities
+                .contains(super::Capabilities::SMB2_GLOBAL_CAP_DFS)
+        );
+        assert_eq!(req.client_guid, 12345);
         assert_eq!(req.dialect_count, 0);
         assert_eq!(req.negotiate_context_count, 2);
         let mut ctx_iterator = req.negotiate_contexts();

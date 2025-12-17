@@ -41,6 +41,14 @@ mod tests {
     use std::io::BufWriter;
 
     #[test]
+    fn should_compute_size() {
+        assert_eq!(
+            super::NetNameNegotiateContextIdBuilder::new(String::from("hello world")).size(),
+            11
+        );
+    }
+
+    #[test]
     fn should_encode_and_parse() {
         let mut buf = BufWriter::new(Vec::with_capacity(1024));
         super::NetNameNegotiateContextIdBuilder::new(String::from("hello world"))

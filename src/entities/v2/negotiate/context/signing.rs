@@ -121,8 +121,16 @@ mod tests {
     use std::io::BufWriter;
 
     #[test]
+    fn should_encode_algorithm() {
+        assert_eq!(super::SigningAlgorithm::HmacSha256.to_u16(), 0x00);
+        assert_eq!(super::SigningAlgorithm::AesCmac.to_u16(), 0x01);
+        assert_eq!(super::SigningAlgorithm::AesGmac.to_u16(), 0x02);
+    }
+
+    #[test]
     fn should_fail_encoding_empty() {
         let cap = super::SigningCapabilitiesBuilder::default();
+        assert_eq!(cap.size(), 2);
         let mut buf_writer = BufWriter::new(Vec::with_capacity(1024));
         let err = cap.encode(&mut buf_writer).unwrap_err();
         assert!(matches!(
@@ -135,6 +143,7 @@ mod tests {
     fn should_encode_and_decode() {
         let cap = super::SigningCapabilitiesBuilder::default()
             .with_signing_algorithm(super::SigningAlgorithm::HmacSha256);
+        assert_eq!(cap.size(), 4);
         let mut buf_writer = BufWriter::new(Vec::with_capacity(1024));
         cap.encode(&mut buf_writer).unwrap();
         let buffer = buf_writer.into_inner().unwrap();

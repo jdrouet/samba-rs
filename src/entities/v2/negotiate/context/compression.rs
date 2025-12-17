@@ -172,6 +172,37 @@ mod tests {
     use std::io::BufWriter;
 
     #[test]
+    fn should_convert_flags_to_u32() {
+        assert_eq!(super::CompressionFlags::None.to_u32(), 0x0000);
+        assert_eq!(super::CompressionFlags::Chained.to_u32(), 0x0001);
+    }
+
+    #[test]
+    fn should_convert_algorithm_to_u16() {
+        assert_eq!(super::CompressionAlgorithm::None.to_u16(), 0x0000);
+        assert_eq!(super::CompressionAlgorithm::LZNT1.to_u16(), 0x0001);
+        assert_eq!(super::CompressionAlgorithm::LZ77.to_u16(), 0x0002);
+        assert_eq!(super::CompressionAlgorithm::LZ77Huffman.to_u16(), 0x0003);
+        assert_eq!(super::CompressionAlgorithm::PatternV1.to_u16(), 0x0004);
+        assert_eq!(super::CompressionAlgorithm::LZ4.to_u16(), 0x0005);
+    }
+
+    #[test]
+    fn should_evaluate_size() {
+        let size = super::CompressionCapabilitiesBuilder::new(super::CompressionFlags::None).size();
+        assert_eq!(size, 8);
+        let size = super::CompressionCapabilitiesBuilder::new(super::CompressionFlags::None)
+            .with_algorithm(super::CompressionAlgorithm::LZ77Huffman)
+            .size();
+        assert_eq!(size, 10);
+        let size = super::CompressionCapabilitiesBuilder::new(super::CompressionFlags::Chained)
+            .with_algorithm(super::CompressionAlgorithm::LZ77Huffman)
+            .with_algorithm(super::CompressionAlgorithm::LZNT1)
+            .size();
+        assert_eq!(size, 12);
+    }
+
+    #[test]
     fn should_encode_and_parse() {
         let mut buf = BufWriter::new(Vec::with_capacity(1024));
         super::CompressionCapabilitiesBuilder::new(super::CompressionFlags::None)

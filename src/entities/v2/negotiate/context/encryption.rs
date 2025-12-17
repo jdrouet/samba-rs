@@ -101,6 +101,17 @@ mod tests {
     use std::io::BufWriter;
 
     #[test]
+    fn should_compute_size() {
+        let size = super::EncryptionCapabilitiesBuilder::default().size();
+        assert_eq!(size, 2);
+        let size = super::EncryptionCapabilitiesBuilder::default()
+            .with_encryption_cipher(super::EncryptionCipher::Aes128Ccm)
+            .with_encryption_cipher(super::EncryptionCipher::Aes128Gcm)
+            .size();
+        assert_eq!(size, 6);
+    }
+
+    #[test]
     fn should_encode_decode() {
         let mut buf = BufWriter::new(Vec::with_capacity(1024));
         super::EncryptionCapabilitiesBuilder::default()

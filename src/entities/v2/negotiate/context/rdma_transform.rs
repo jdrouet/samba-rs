@@ -128,6 +128,23 @@ mod tests {
     use std::io::BufWriter;
 
     #[test]
+    fn should_convert_transform_to_u16() {
+        assert_eq!(super::RDMATransformId::None.to_u16(), 0);
+        assert_eq!(super::RDMATransformId::Encryption.to_u16(), 1);
+        assert_eq!(super::RDMATransformId::Signing.to_u16(), 2);
+    }
+
+    #[test]
+    fn should_compute_size() {
+        let item = super::RDMATransformCapabilitiesBuilder::default();
+        assert_eq!(item.size(), 8);
+        let item = item.with_transform_id(super::RDMATransformId::None);
+        assert_eq!(item.size(), 10);
+        let item = item.with_transform_id(super::RDMATransformId::Encryption);
+        assert_eq!(item.size(), 12);
+    }
+
+    #[test]
     fn should_fail_encoding_empty() {
         let cap = super::RDMATransformCapabilitiesBuilder::default();
         let mut buf_writer = BufWriter::new(Vec::with_capacity(1024));

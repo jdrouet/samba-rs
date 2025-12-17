@@ -137,6 +137,26 @@ mod tests {
     use std::io::BufWriter;
 
     #[test]
+    fn should_convert_to_u16() {
+        assert_eq!(super::HashAlgorithm::Sha512.to_u16(), 0x0001);
+    }
+
+    #[test]
+    fn should_compute_size() {
+        let size = super::PreauthIntegrityCapabilitiesBuilder::default().size();
+        assert_eq!(size, 4);
+        let size = super::PreauthIntegrityCapabilitiesBuilder::default()
+            .with_hash_algorithm(super::HashAlgorithm::Sha512)
+            .size();
+        assert_eq!(size, 6);
+        let size = super::PreauthIntegrityCapabilitiesBuilder::default()
+            .with_hash_algorithm(super::HashAlgorithm::Sha512)
+            .with_salt(vec![0, 1, 2, 3, 4, 5])
+            .size();
+        assert_eq!(size, 12);
+    }
+
+    #[test]
     fn should_encode_and_parse() {
         let mut buf = BufWriter::new(Vec::with_capacity(1024));
         super::PreauthIntegrityCapabilitiesBuilder::default()
