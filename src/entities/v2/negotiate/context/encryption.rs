@@ -121,7 +121,23 @@ mod tests {
         let buf = buf.into_inner().unwrap();
         let cap = super::EncryptionCapabilities::parse(&buf).unwrap();
         assert_eq!(cap.cipher_count, 1);
-        let _ = cap.ciphers().collect::<Vec<_>>();
+        let list = cap.ciphers().collect::<Vec<_>>();
+        assert_eq!(list.len(), 1);
+    }
+
+    #[test]
+    fn should_encode_decode_multiple_capabilities() {
+        let mut buf = BufWriter::new(Vec::with_capacity(1024));
+        super::EncryptionCapabilitiesBuilder::default()
+            .with_encryption_cipher(super::EncryptionCipher::Aes128Ccm)
+            .with_encryption_cipher(super::EncryptionCipher::Aes128Gcm)
+            .encode(&mut buf)
+            .unwrap();
+        let buf = buf.into_inner().unwrap();
+        let cap = super::EncryptionCapabilities::parse(&buf).unwrap();
+        assert_eq!(cap.cipher_count, 2);
+        let list = cap.ciphers().collect::<Vec<_>>();
+        assert_eq!(list.len(), 2);
     }
 
     #[test]

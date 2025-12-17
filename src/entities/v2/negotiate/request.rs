@@ -293,19 +293,31 @@ impl<'a> Request<'a> {
         }
         let dialects = &buf[dialects_start..dialects_end];
         // padding
-        println!("buf = {:?}", &buf[dialects_end..]);
-        let negotiate_context_start = (negotiate_context_offset - 64) as usize; // remove header
-        let negotiate_contexts = &buf[negotiate_context_start..];
+        Ok(if negotiate_context_count == 0 {
+            Self {
+                dialect_count,
+                security_mode,
+                capabilities,
+                client_guid,
+                negotiate_context_offset: 0,
+                negotiate_context_count: 0,
+                dialects,
+                negotiate_contexts: &[],
+            }
+        } else {
+            let negotiate_context_start = (negotiate_context_offset - 64) as usize; // remove header
+            let negotiate_contexts = &buf[negotiate_context_start..];
 
-        Ok(Self {
-            dialect_count,
-            security_mode,
-            capabilities,
-            client_guid,
-            negotiate_context_offset,
-            negotiate_context_count,
-            dialects,
-            negotiate_contexts,
+            Self {
+                dialect_count,
+                security_mode,
+                capabilities,
+                client_guid,
+                negotiate_context_offset,
+                negotiate_context_count,
+                dialects,
+                negotiate_contexts,
+            }
         })
     }
 }
@@ -416,11 +428,11 @@ impl RequestBuilder {
         };
         let context_offset =
             u32::try_from(context_offset + padding).map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write_all(&context_offset.to_le_bytes())?; // 32
+        buf.write_all(&context_offset.to_le_bytes())?; // 28..32
         // context_count (2)
         let context_count = u16::try_from(self.negotiate_contexts.len())
             .map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write_all(&context_count.to_le_bytes())?; // 34
+        buf.write_all(&context_count.to_le_bytes())?; // 32..34
         // reserved (2)
         buf.write_all(&[0, 0])?; // 36
         // dialects
@@ -428,9 +440,7 @@ impl RequestBuilder {
             buf.write_all(&dialect.to_u16().to_le_bytes())?;
         }
         // padding
-        if padding > 0 {
-            buf.write_all(&vec![0u8; padding])?;
-        }
+        buf.write_all(&vec![0u8; padding])?;
         // contexts
         for ctx in &self.negotiate_contexts {
             ctx.encode(buf)?;
@@ -456,11 +466,12 @@ mod tests {
         super::RequestBuilder::default().encode(&mut buf).unwrap();
         let req = super::Request::parse(&buf).unwrap();
         assert_eq!(req.dialect_count, 0);
+        assert_eq!(req.negotiate_context_offset, 0);
         assert_eq!(req.negotiate_context_count, 0);
     }
 
     #[test]
-    fn should_encode_and_parse_only_dialects() {
+    fn should_encode_and_parse_only_dialects_no_padding() {
         let mut buf = Vec::with_capacity(1024);
         super::RequestBuilder::default()
             .with_dialect(super::Dialect::Smb202)
@@ -469,7 +480,122 @@ mod tests {
             .unwrap();
         let req = super::Request::parse(&buf).unwrap();
         assert_eq!(req.dialect_count, 2);
+        assert_eq!(req.dialects.len(), 4);
+        let items = req.dialects().collect::<Vec<_>>();
+        assert_eq!(items.len(), 2);
+        assert_eq!(req.negotiate_context_offset, 0);
         assert_eq!(req.negotiate_context_count, 0);
+        assert_eq!(req.negotiate_contexts.len(), 0);
+    }
+
+    #[test]
+    fn should_encode_and_parse_only_dialects_with_padding() {
+        let mut buf = Vec::with_capacity(1024);
+        super::RequestBuilder::default()
+            .with_dialect(super::Dialect::Smb202)
+            .with_dialect(super::Dialect::Smb21)
+            .with_dialect(super::Dialect::Smb30)
+            .with_dialect(super::Dialect::Smb302)
+            .with_dialect(super::Dialect::Smb311)
+            .encode(&mut buf)
+            .unwrap();
+        let req = super::Request::parse(&buf).unwrap();
+        assert_eq!(req.dialect_count, 5);
+        assert_eq!(req.dialects.len(), 10);
+        let items = req.dialects().collect::<Vec<_>>();
+        assert_eq!(items.len(), 5);
+        assert_eq!(req.negotiate_context_offset, 0);
+        assert_eq!(req.negotiate_context_count, 0);
+        assert_eq!(req.negotiate_contexts.len(), 0);
+    }
+
+    #[test]
+    fn should_encode_and_parse_dialects_and_context_no_padding() {
+        use crate::entities::v2::negotiate::context::transport::{
+            TransportCapabilitiesBuilder, TransportFlags,
+        };
+
+        let mut buf = Vec::with_capacity(1024);
+        super::RequestBuilder::default()
+            .with_dialect(super::Dialect::Smb202)
+            .with_dialect(super::Dialect::Smb21)
+            .with_negotiate_context(
+                TransportCapabilitiesBuilder::new(
+                    TransportFlags::SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY,
+                )
+                .into(),
+            )
+            .encode(&mut buf)
+            .unwrap();
+        let req = super::Request::parse(&buf).unwrap();
+        assert_eq!(req.dialect_count, 2);
+        assert_eq!(req.dialects.len(), 4);
+        let items = req.dialects().collect::<Vec<_>>();
+        assert_eq!(items.len(), 2);
+        assert_eq!(req.negotiate_context_offset, 104);
+        assert_eq!(req.negotiate_context_count, 1);
+        assert_eq!(req.negotiate_contexts.len(), 12);
+    }
+
+    #[test]
+    fn should_encode_and_parse_dialects_and_context_padding() {
+        use crate::entities::v2::negotiate::context::transport::{
+            TransportCapabilitiesBuilder, TransportFlags,
+        };
+
+        let mut buf = Vec::with_capacity(1024);
+        super::RequestBuilder::default()
+            .with_dialect(super::Dialect::Smb202)
+            .with_negotiate_context(
+                TransportCapabilitiesBuilder::new(
+                    TransportFlags::SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY,
+                )
+                .into(),
+            )
+            .encode(&mut buf)
+            .unwrap();
+        let req = super::Request::parse(&buf).unwrap();
+        assert_eq!(req.dialect_count, 1);
+        assert_eq!(req.dialects.len(), 2);
+        let items = req.dialects().collect::<Vec<_>>();
+        assert_eq!(items.len(), 1);
+        assert_eq!(req.negotiate_context_offset, 104);
+        assert_eq!(req.negotiate_context_count, 1);
+        assert_eq!(req.negotiate_contexts.len(), 12);
+    }
+
+    #[test]
+    fn should_encode_and_parse_checking_gap() {
+        use crate::entities::v2::negotiate::context::transport::{
+            TransportCapabilitiesBuilder, TransportFlags,
+        };
+
+        let mut buf = Vec::with_capacity(1024);
+        super::RequestBuilder::default()
+            .with_client_guid(12345)
+            .with_security_mode(super::SecurityMode::SMB2_NEGOTIATE_SIGNING_ENABLED)
+            .with_capability(super::Capabilities::SMB2_GLOBAL_CAP_DFS)
+            .with_negotiate_context(
+                TransportCapabilitiesBuilder::new(
+                    TransportFlags::SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY,
+                )
+                .into(),
+            )
+            .with_dialect(super::Dialect::Smb202)
+            .with_dialect(super::Dialect::Smb21)
+            .with_dialect(super::Dialect::Smb30)
+            .with_dialect(super::Dialect::Smb302)
+            .with_dialect(super::Dialect::Smb311)
+            .encode(&mut buf)
+            .unwrap();
+        let req = super::Request::parse(&buf).unwrap();
+        assert_eq!(req.dialect_count, 5);
+        assert_eq!(req.dialects.len(), 10);
+        let items = req.dialects().collect::<Vec<_>>();
+        assert_eq!(items.len(), 5);
+        assert_eq!(req.negotiate_context_offset, 112);
+        assert_eq!(req.negotiate_context_count, 1);
+        assert_eq!(req.negotiate_contexts.len(), 12);
     }
 
     #[test]
@@ -511,9 +637,25 @@ mod tests {
         );
         assert_eq!(req.client_guid, 12345);
         assert_eq!(req.dialect_count, 0);
+        assert_eq!(req.negotiate_context_offset, 104);
         assert_eq!(req.negotiate_context_count, 2);
         let mut ctx_iterator = req.negotiate_contexts();
         let _ctx = ctx_iterator.try_next().unwrap();
         let _ctx = ctx_iterator.try_next().unwrap();
+    }
+
+    #[test]
+    fn should_fail_parsing_if_too_small() {
+        let buf = [1u8, 2, 3, 4];
+        let err = super::Request::parse(&buf).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        //
+        let buf = [1u8; 35];
+        let err = super::Request::parse(&buf).unwrap_err();
+        assert_eq!(err, super::ParseError::BufferTooShort);
+        //
+        let buf = [1u8; 36];
+        let err = super::Request::parse(&buf).unwrap_err();
+        assert_eq!(err, super::ParseError::InvalidStructureSize(257));
     }
 }

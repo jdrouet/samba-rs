@@ -189,6 +189,39 @@ impl NegotiateContextBuilder {
 
 #[cfg(test)]
 mod tests {
+    use crate::entities::BufferIterator;
+
+    #[test]
+    fn should_compute_size() {
+        let cap = super::compression::CompressionCapabilitiesBuilder::new(
+            super::compression::CompressionFlags::Chained,
+        )
+        .with_algorithm(super::compression::CompressionAlgorithm::LZ77);
+        let size = super::NegotiateContextBuilder::CompressionCapabilities(cap).size();
+        assert_eq!(size, 18);
+
+        let cap = super::transport::TransportCapabilitiesBuilder::new(
+            super::transport::TransportFlags::SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY,
+        );
+        let size = super::NegotiateContextBuilder::TransportCapabilities(cap).size();
+        assert_eq!(size, 12);
+    }
+
+    #[test]
+    fn should_encode_and_decode() {
+        let cap = super::transport::TransportCapabilitiesBuilder::new(
+            super::transport::TransportFlags::SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY,
+        );
+        let cap = super::NegotiateContextBuilder::TransportCapabilities(cap);
+        let mut buf = Vec::with_capacity(256);
+        cap.encode(&mut buf).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        assert!(matches!(
+            decoded,
+            super::NegotiateContext::TransportCapabilities(_)
+        ));
+    }
+
     #[test]
     fn should_parse_negotiate_context() {
         let buf: [u8; _] = [

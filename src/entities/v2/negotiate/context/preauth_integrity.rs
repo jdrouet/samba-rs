@@ -19,10 +19,11 @@ impl TryFrom<u16> for HashAlgorithm {
 }
 
 impl HashAlgorithm {
-    pub fn to_u16(&self) -> u16 {
-        match self {
-            Self::Sha512 => 0x0001,
-        }
+    pub const fn to_u16(&self) -> u16 {
+        // match self {
+        //     Self::Sha512 => 0x0001,
+        // }
+        1
     }
 }
 
