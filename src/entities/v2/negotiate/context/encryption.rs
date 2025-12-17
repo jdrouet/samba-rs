@@ -88,9 +88,9 @@ impl EncryptionCapabilitiesBuilder {
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         let length =
             u16::try_from(self.ciphers.len()).map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&length.to_le_bytes())?;
+        buf.write_all(&length.to_le_bytes())?;
         for item in &self.ciphers {
-            buf.write(&item.to_u16().to_le_bytes())?;
+            buf.write_all(&item.to_u16().to_le_bytes())?;
         }
         Ok(())
     }

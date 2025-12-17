@@ -157,11 +157,11 @@ impl CompressionCapabilitiesBuilder {
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
         let length = u16::try_from(self.compression_algorithms.len())
             .map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&length.to_le_bytes())?;
-        buf.write(&[0, 0u8])?;
-        buf.write(&self.flags.to_u32().to_le_bytes())?;
+        buf.write_all(&length.to_le_bytes())?;
+        buf.write_all(&[0, 0u8])?;
+        buf.write_all(&self.flags.to_u32().to_le_bytes())?;
         for item in &self.compression_algorithms {
-            buf.write(&item.to_u16().to_le_bytes())?;
+            buf.write_all(&item.to_u16().to_le_bytes())?;
         }
         Ok(())
     }

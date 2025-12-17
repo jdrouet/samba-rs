@@ -34,7 +34,7 @@ impl SigningAlgorithm {
     }
 
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> std::io::Result<()> {
-        buf.write(&self.to_u16().to_le_bytes()).map(|_| ())
+        buf.write_all(&self.to_u16().to_le_bytes()).map(|_| ())
     }
 }
 
@@ -108,7 +108,7 @@ impl SigningCapabilitiesBuilder {
 
         let length = u16::try_from(self.signing_algorithms.len())
             .map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&length.to_le_bytes())?;
+        buf.write_all(&length.to_le_bytes())?;
         for item in &self.signing_algorithms {
             item.encode(buf)?;
         }

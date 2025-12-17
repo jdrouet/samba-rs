@@ -167,11 +167,11 @@ impl NegotiateContextBuilder {
     }
 
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        buf.write(&self.to_u16().to_le_bytes())?;
+        buf.write_all(&self.to_u16().to_le_bytes())?;
         let data_length =
             u16::try_from(self.inner_size()).map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&data_length.to_le_bytes())?;
-        buf.write(&[0, 0, 0, 0])?;
+        buf.write_all(&data_length.to_le_bytes())?;
+        buf.write_all(&[0, 0, 0, 0])?;
         match self {
             Self::PreauthIntegrityCapabilities(inner) => inner.encode(buf),
             Self::EncryptionCapabilities(inner) => inner.encode(buf),
@@ -181,7 +181,7 @@ impl NegotiateContextBuilder {
             Self::RDMATransformCapabilities(inner) => inner.encode(buf),
             Self::SigningCapabilities(inner) => inner.encode(buf),
             Self::ContextTypeReserved(inner) => {
-                buf.write(&inner).map(|_| ()).map_err(EncodeError::from)
+                buf.write_all(inner).map(|_| ()).map_err(EncodeError::from)
             }
         }
     }

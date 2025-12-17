@@ -44,7 +44,7 @@ impl RDMATransformId {
     }
 
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> std::io::Result<()> {
-        buf.write(&self.to_u16().to_le_bytes()).map(|_| ())
+        buf.write_all(&self.to_u16().to_le_bytes()).map(|_| ())
     }
 }
 
@@ -114,8 +114,8 @@ impl RDMATransformCapabilitiesBuilder {
 
         let length =
             u16::try_from(self.transform_ids.len()).map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&length.to_le_bytes())?;
-        buf.write(&[0, 0, 0, 0, 0, 0u8])?;
+        buf.write_all(&length.to_le_bytes())?;
+        buf.write_all(&[0, 0, 0, 0, 0, 0u8])?;
         for item in &self.transform_ids {
             item.encode(buf)?;
         }

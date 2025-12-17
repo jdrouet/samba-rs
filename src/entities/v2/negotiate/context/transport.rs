@@ -39,7 +39,7 @@ impl TransportCapabilitiesBuilder {
     }
 
     pub fn encode<W: std::io::Write>(&self, buf: &mut W) -> Result<(), EncodeError> {
-        buf.write(&self.flags.bits().to_le_bytes())?;
+        buf.write_all(&self.flags.bits().to_le_bytes())?;
         Ok(())
     }
 }

@@ -122,12 +122,12 @@ impl PreauthIntegrityCapabilitiesBuilder {
         let salt_length =
             u16::try_from(self.salt.len()).map_err(|_| EncodeError::NumberOutOfBound)?;
 
-        buf.write(&hash_algorithm_count.to_le_bytes())?;
-        buf.write(&salt_length.to_le_bytes())?;
+        buf.write_all(&hash_algorithm_count.to_le_bytes())?;
+        buf.write_all(&salt_length.to_le_bytes())?;
         for algorithm in &self.hash_algorithms {
-            buf.write(&algorithm.to_u16().to_le_bytes())?;
+            buf.write_all(&algorithm.to_u16().to_le_bytes())?;
         }
-        buf.write(self.salt.as_slice())?;
+        buf.write_all(self.salt.as_slice())?;
         Ok(())
     }
 }

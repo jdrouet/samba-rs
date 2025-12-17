@@ -395,19 +395,19 @@ impl RequestBuilder {
         let dialect_size = self.dialects.len() * 2;
 
         // structure size (2)
-        buf.write(&36u16.to_le_bytes())?; // 0..2
+        buf.write_all(&36u16.to_le_bytes())?; // 0..2
         // dialect count (2)
         let dialect_count =
             u16::try_from(self.dialects.len()).map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&dialect_count.to_le_bytes())?; // 2..4
+        buf.write_all(&dialect_count.to_le_bytes())?; // 2..4
         // security mode (2)
-        buf.write(&self.security_mode.bits().to_le_bytes())?; // 4..6
+        buf.write_all(&self.security_mode.bits().to_le_bytes())?; // 4..6
         // reserved (2)
-        buf.write(&[0, 0])?; // 6..8
+        buf.write_all(&[0, 0])?; // 6..8
         // capabilities (4)
-        buf.write(&self.capabilities.bits().to_le_bytes())?; // 8..12
+        buf.write_all(&self.capabilities.bits().to_le_bytes())?; // 8..12
         // client guid (16)
-        buf.write(&self.client_guid.to_le_bytes())?; // 12..28
+        buf.write_all(&self.client_guid.to_le_bytes())?; // 12..28
         // negotiate context offset (4)
         let context_offset = 64 + 28 + 8 + dialect_size;
         let padding = match context_offset % 8 {
@@ -416,20 +416,20 @@ impl RequestBuilder {
         };
         let context_offset =
             u32::try_from(context_offset + padding).map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&context_offset.to_le_bytes())?; // 32
+        buf.write_all(&context_offset.to_le_bytes())?; // 32
         // context_count (2)
         let context_count = u16::try_from(self.negotiate_contexts.len())
             .map_err(|_| EncodeError::NumberOutOfBound)?;
-        buf.write(&context_count.to_le_bytes())?; // 34
+        buf.write_all(&context_count.to_le_bytes())?; // 34
         // reserved (2)
-        buf.write(&[0, 0])?; // 36
+        buf.write_all(&[0, 0])?; // 36
         // dialects
         for dialect in &self.dialects {
-            buf.write(&dialect.to_u16().to_le_bytes())?;
+            buf.write_all(&dialect.to_u16().to_le_bytes())?;
         }
         // padding
         if padding > 0 {
-            buf.write(&vec![0u8; padding])?;
+            buf.write_all(&vec![0u8; padding])?;
         }
         // contexts
         for ctx in &self.negotiate_contexts {
