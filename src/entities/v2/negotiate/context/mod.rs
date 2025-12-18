@@ -162,7 +162,7 @@ impl NegotiateContextBuilder {
             Self::TransportCapabilities(_) => 0x0006,
             Self::RDMATransformCapabilities(_) => 0x0007,
             Self::SigningCapabilities(_) => 0x0008,
-            Self::ContextTypeReserved(_) => 0x0100,
+            Self::ContextTypeReserved(_) => 0x1000,
         }
     }
 
@@ -192,6 +192,14 @@ mod tests {
     use crate::entities::BufferIterator;
 
     #[test]
+    fn should_fail_parsing_unsupported_context_type() {
+        assert_eq!(
+            super::NegotiateContextType::try_from(0x1234).unwrap_err(),
+            0x1234
+        );
+    }
+
+    #[test]
     fn should_compute_size() {
         let cap = super::compression::CompressionCapabilitiesBuilder::new(
             super::compression::CompressionFlags::Chained,
@@ -208,7 +216,92 @@ mod tests {
     }
 
     #[test]
-    fn should_encode_and_decode() {
+    fn should_encode_and_decode_compression() {
+        let cap = super::compression::CompressionCapabilitiesBuilder::new(
+            super::compression::CompressionFlags::Chained,
+        )
+        .with_algorithm(super::compression::CompressionAlgorithm::LZ77);
+        let cap = super::NegotiateContextBuilder::CompressionCapabilities(cap);
+        let mut buf = Vec::with_capacity(256);
+        cap.encode(&mut buf).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        assert!(matches!(
+            decoded,
+            super::NegotiateContext::CompressionCapabilities(_)
+        ));
+    }
+
+    #[test]
+    fn should_encode_and_decode_encryption() {
+        let cap = super::encryption::EncryptionCapabilitiesBuilder::default()
+            .with_encryption_cipher(super::encryption::EncryptionCipher::Aes128Ccm);
+        let cap = super::NegotiateContextBuilder::from(cap);
+        let mut buf = Vec::with_capacity(256);
+        cap.encode(&mut buf).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        assert!(matches!(
+            decoded,
+            super::NegotiateContext::EncryptionCapabilities(_)
+        ));
+    }
+
+    #[test]
+    fn should_encode_and_decode_net_name() {
+        let cap =
+            super::net_name::NetNameNegotiateContextIdBuilder::new(String::from("hello world"));
+        let cap = super::NegotiateContextBuilder::from(cap);
+        let mut buf = Vec::with_capacity(256);
+        cap.encode(&mut buf).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        assert!(matches!(
+            decoded,
+            super::NegotiateContext::NetNameNegotiateContextId(_)
+        ));
+    }
+
+    #[test]
+    fn should_encode_and_decode_preauth_integrity() {
+        let cap = super::preauth_integrity::PreauthIntegrityCapabilitiesBuilder::default()
+            .with_hash_algorithm(super::preauth_integrity::HashAlgorithm::Sha512)
+            .with_salt(vec![0; 4]);
+        let cap = super::NegotiateContextBuilder::from(cap);
+        let mut buf = Vec::with_capacity(256);
+        cap.encode(&mut buf).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        assert!(matches!(
+            decoded,
+            super::NegotiateContext::PreauthIntegrityCapabilities(_)
+        ));
+    }
+
+    #[test]
+    fn should_encode_and_decode_rdma_transform() {
+        let cap = super::rdma_transform::RDMATransformCapabilitiesBuilder::default()
+            .with_transform_id(super::rdma_transform::RDMATransformId::Encryption);
+        let cap = super::NegotiateContextBuilder::from(cap);
+        let mut buf = Vec::with_capacity(256);
+        cap.encode(&mut buf).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        assert!(matches!(
+            decoded,
+            super::NegotiateContext::RDMATransformCapabilities(_)
+        ));
+    }
+
+    #[test]
+    fn should_encode_and_decode_context_type_reserved() {
+        let cap = super::NegotiateContextBuilder::ContextTypeReserved(vec![0, 1, 2, 3]);
+        let mut buf = Vec::with_capacity(256);
+        cap.encode(&mut buf).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        assert!(matches!(
+            decoded,
+            super::NegotiateContext::ContextTypeReserved(_)
+        ));
+    }
+
+    #[test]
+    fn should_encode_and_decode_transport() {
         let cap = super::transport::TransportCapabilitiesBuilder::new(
             super::transport::TransportFlags::SMB2_ACCEPT_TRANSPORT_LEVEL_SECURITY,
         );
