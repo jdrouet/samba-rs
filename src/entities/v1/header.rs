@@ -1,4 +1,6 @@
-//! Taken from https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/69a29f73-de0c-45a6-a1aa-8ceeea42217f
+//! Samba v1 header
+//!
+//! Related doc <https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/69a29f73-de0c-45a6-a1aa-8ceeea42217f>
 
 use crate::entities::{u16_from_le_bytes, u32_from_le_bytes};
 

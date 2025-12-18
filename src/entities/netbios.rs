@@ -1,3 +1,7 @@
+//! NetBios
+//!
+//! Related doc <https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/1dfacde4-b5c7-4494-8a14-a09d3ab4cc83>
+
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
     #[error("buffer too short")]
@@ -8,8 +12,6 @@ pub enum ParseError {
 
 #[derive(Debug)]
 /// NetBios Header
-///
-/// https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/1dfacde4-b5c7-4494-8a14-a09d3ab4cc83
 pub struct Header {
     // StreamProtocolLength (3 bytes): The length, in bytes, of the SMB2Message in network byte order.
     // This field does not include the 4-byte Direct TCP transport packet header;
