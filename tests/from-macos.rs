@@ -58,7 +58,10 @@ const MSG_03_RES_NEGOTIATE: [u8; 288] = [
 
 #[test]
 fn should_parse_msg_00_req_negotiate() {
+    use samba_rs::entities::BufferReader;
     use samba_rs::entities::v1::header::{Command, ExtendedFlags, Flags};
+    use samba_rs::entities::v1::negotiate;
+    use samba_rs::entities::v1::parameters;
 
     let netbios = samba_rs::entities::netbios::Header::parse(&MSG_00_REQ_NEGOTIATE[0..4]).unwrap();
     assert_eq!(netbios.length(), 69);
@@ -83,6 +86,19 @@ fn should_parse_msg_00_req_negotiate() {
     assert_eq!(header.tree_id, 65535);
     assert_eq!(header.user_id, 65535);
     assert_eq!(header.multiplex_id, 0);
+
+    let mut params_reader = BufferReader::new(&MSG_00_REQ_NEGOTIATE[4 + 32..]);
+    let params = parameters::Parameters::parse(&mut params_reader).unwrap();
+    assert_eq!(params.word_count, 0);
+
+    // The parameters section is just 1 byte (WordCount = 0).
+    let mut negotiate_reader = BufferReader::new(&MSG_00_REQ_NEGOTIATE[4 + 32 + 1..]);
+    let negotiate_req = negotiate::request::Request::parse(&mut negotiate_reader).unwrap();
+    let dialects = negotiate_req
+        .dialects()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert_eq!(dialects, &["NT LM 0.12", "SMB 2.002", "SMB 2.???"]);
 }
 
 #[test]
