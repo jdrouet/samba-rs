@@ -283,8 +283,19 @@ bitflags::bitflags! {
         /// that the packet has been signed. This bit field SHOULD be set to 1 when the negotiated
         /// dialect is NT LANMAN or later.
         const SMB_FLAGS2_SMB_SECURITY_SIGNATURE = 0x0004;
+        // const SMB_FLAGS2_UNUSED_0008 = 0x0008;
+        /// Security Signatures Required: Security signatures are not required
+        const SMB_FLAGS2_SECURITY_SIGNATURES_REQUIRED = 0x0010;
+        // const SMB_FLAGS2_UNUSED_0020 = 0x0020;
         /// Reserved but not implemented.
         const SMB_FLAGS2_IS_LONG_NAME = 0x0040;
+        // const SMB_FLAGS2_UNUSED_0080 = 0x0080;
+        // const SMB_FLAGS2_UNUSED_0100 = 0x0100;
+        // const SMB_FLAGS2_UNUSED_0200 = 0x0200;
+        /// Reparse Path: The request does not use a @GMT reparse path
+        const SMB_FLAGS2_REPARSE_PATH = 0x0400;
+        /// Extended Security Negotiation: Extended security negotiation is supported
+        const SMB_FLAGS2_EXTENDED_SECURITY_NEGOTIATION = 0x0800;
         /// If the bit is set, any pathnames in this SMB SHOULD be resolved in the Distributed File System (DFS).
         const SMB_FLAGS2_DFS = 0x1000;
         /// This flag is useful only on a read request. If the bit is set, then the client MAY read the file
