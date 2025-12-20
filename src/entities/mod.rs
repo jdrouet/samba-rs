@@ -3,9 +3,20 @@ pub mod netbios;
 pub mod v1;
 pub mod v2;
 
-struct BufferIterator<'a>(&'a [u8]);
+#[derive(Debug)]
+pub struct BufferReader<'a>(&'a [u8]);
 
-impl<'a> BufferIterator<'a> {
+impl<'a> BufferReader<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        Self(data)
+    }
+
+    fn pop(&mut self) -> Option<u8> {
+        let (head, tail) = self.0.split_at_checked(1)?;
+        self.0 = tail;
+        Some(head[0])
+    }
+
     fn next(&mut self, length: usize) -> Option<&'a [u8]> {
         let value = self.0.get(0..length)?;
         self.0 = &self.0[length..];

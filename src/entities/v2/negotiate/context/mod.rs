@@ -1,4 +1,4 @@
-use crate::entities::BufferIterator;
+use crate::entities::BufferReader;
 use crate::entities::v2::negotiate::request::{EncodeError, ParseError};
 
 pub mod compression;
@@ -61,7 +61,7 @@ pub enum NegotiateContext<'a> {
 }
 
 impl<'a> NegotiateContext<'a> {
-    pub(super) fn parse(it: &mut BufferIterator<'a>) -> Result<Self, ParseError> {
+    pub(super) fn parse(it: &mut BufferReader<'a>) -> Result<Self, ParseError> {
         let context_type = it.next_u16().ok_or(ParseError::BufferTooShort)?;
         let context_type =
             NegotiateContextType::try_from(context_type).map_err(ParseError::InvalidContextType)?;
@@ -106,11 +106,11 @@ impl<'a> NegotiateContext<'a> {
     }
 }
 
-pub struct NegotiateContextIterator<'a>(BufferIterator<'a>);
+pub struct NegotiateContextIterator<'a>(BufferReader<'a>);
 
 impl<'a> NegotiateContextIterator<'a> {
     pub fn new(buf: &'a [u8]) -> Self {
-        Self(BufferIterator(buf))
+        Self(BufferReader(buf))
     }
 
     pub fn try_next(&mut self) -> Result<Option<super::context::NegotiateContext<'a>>, ParseError> {
@@ -189,7 +189,7 @@ impl NegotiateContextBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::entities::BufferIterator;
+    use crate::entities::BufferReader;
 
     #[test]
     fn should_fail_parsing_unsupported_context_type() {
@@ -224,7 +224,7 @@ mod tests {
         let cap = super::NegotiateContextBuilder::CompressionCapabilities(cap);
         let mut buf = Vec::with_capacity(256);
         cap.encode(&mut buf).unwrap();
-        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferReader(&buf)).unwrap();
         assert!(matches!(
             decoded,
             super::NegotiateContext::CompressionCapabilities(_)
@@ -238,7 +238,7 @@ mod tests {
         let cap = super::NegotiateContextBuilder::from(cap);
         let mut buf = Vec::with_capacity(256);
         cap.encode(&mut buf).unwrap();
-        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferReader(&buf)).unwrap();
         assert!(matches!(
             decoded,
             super::NegotiateContext::EncryptionCapabilities(_)
@@ -252,7 +252,7 @@ mod tests {
         let cap = super::NegotiateContextBuilder::from(cap);
         let mut buf = Vec::with_capacity(256);
         cap.encode(&mut buf).unwrap();
-        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferReader(&buf)).unwrap();
         assert!(matches!(
             decoded,
             super::NegotiateContext::NetNameNegotiateContextId(_)
@@ -267,7 +267,7 @@ mod tests {
         let cap = super::NegotiateContextBuilder::from(cap);
         let mut buf = Vec::with_capacity(256);
         cap.encode(&mut buf).unwrap();
-        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferReader(&buf)).unwrap();
         assert!(matches!(
             decoded,
             super::NegotiateContext::PreauthIntegrityCapabilities(_)
@@ -281,7 +281,7 @@ mod tests {
         let cap = super::NegotiateContextBuilder::from(cap);
         let mut buf = Vec::with_capacity(256);
         cap.encode(&mut buf).unwrap();
-        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferReader(&buf)).unwrap();
         assert!(matches!(
             decoded,
             super::NegotiateContext::RDMATransformCapabilities(_)
@@ -293,7 +293,7 @@ mod tests {
         let cap = super::NegotiateContextBuilder::ContextTypeReserved(vec![0, 1, 2, 3]);
         let mut buf = Vec::with_capacity(256);
         cap.encode(&mut buf).unwrap();
-        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferReader(&buf)).unwrap();
         assert!(matches!(
             decoded,
             super::NegotiateContext::ContextTypeReserved(_)
@@ -308,7 +308,7 @@ mod tests {
         let cap = super::NegotiateContextBuilder::TransportCapabilities(cap);
         let mut buf = Vec::with_capacity(256);
         cap.encode(&mut buf).unwrap();
-        let decoded = super::NegotiateContext::parse(&mut BufferIterator(&buf)).unwrap();
+        let decoded = super::NegotiateContext::parse(&mut BufferReader(&buf)).unwrap();
         assert!(matches!(
             decoded,
             super::NegotiateContext::TransportCapabilities(_)
