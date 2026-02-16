@@ -10,7 +10,7 @@ name = "netbios"
 harness = false
 
 [dependencies]
-bitflags = "2.10"
+bitflags = "2.11"
 criterion = "0.8"
 derive_more = { version = "2.1", features = ["from"] }
 thiserror = "2.0"
